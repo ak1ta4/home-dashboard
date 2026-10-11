@@ -1,6 +1,9 @@
 (() => {
-  // Served by the local agent → same origin. Loaded as a browser extension → talk to the agent directly.
-  const API = location.protocol.startsWith('http') ? '' : 'http://127.0.0.1:47800';
+  // Served by the local agent → same origin. Anywhere else (browser extension, GitHub Pages)
+  // → talk to the agent on this machine directly; without it the page degrades gracefully.
+  const AGENT = 'http://127.0.0.1:47800';
+  const API = location.origin === AGENT || location.origin === 'http://localhost:47800' ? '' : AGENT;
+  const IS_WEB = location.protocol === 'https:' || location.protocol === 'http:';
   // Default location; override locally in config.json (served by the agent, git-ignored).
   let WX = { city: 'Madrid', region: 'Spain', lat: 40.4168, lon: -3.7038 };
 
@@ -139,14 +142,32 @@
     renderSugg();
   }
 
+  // Without the agent (e.g. GitHub Pages) fall back to Google Suggest's JSONP mode.
+  let jsonpSeq = 0;
+  const jsonpSuggest = v => new Promise(resolve => {
+    const cb = `__sugg${++jsonpSeq}`, s = document.createElement('script');
+    const done = list => { delete window[cb]; s.remove(); clearTimeout(t); resolve(list); };
+    const t = setTimeout(() => done([]), 2500);
+    window[cb] = d => done(Array.isArray(d && d[1]) ? d[1].filter(x => typeof x === 'string').slice(0, 8) : []);
+    s.onerror = () => done([]);
+    s.src = 'https://suggestqueries.google.com/complete/search?client=firefox&hl=es&ie=utf-8&oe=utf-8'
+      + `&callback=${cb}&q=${encodeURIComponent(v)}`;
+    document.head.append(s);
+  });
   const fetchRemote = async v => {
     if (remoteCache.has(v)) return remoteCache.get(v);
-    try {
-      const r = await fetch(`${API}/api/suggest?q=${encodeURIComponent(v)}`, { cache: 'no-store' });
-      const j = r.ok ? await r.json() : [];
-      if (Array.isArray(j)) { remoteCache.set(v, j); return j; }
-    } catch {}
-    return [];
+    let list = null;
+    if (agentOk || !IS_WEB) {
+      try {
+        const r = await fetch(`${API}/api/suggest?q=${encodeURIComponent(v)}`, { cache: 'no-store' });
+        const j = r.ok ? await r.json() : null;
+        if (Array.isArray(j)) list = j;
+      } catch {}
+    }
+    if (!list && IS_WEB) list = await jsonpSuggest(v);
+    list = list || [];
+    remoteCache.set(v, list);
+    return list;
   };
   const update = () => {
     typed = q.value; sel = -1;
@@ -440,7 +461,9 @@
     renderMedia();
   };
 
+  // 1 s while the agent answers; back off to 5 s when it doesn't (e.g. on GitHub Pages).
   const poll = async () => {
+    clearTimeout(poll.t);
     try {
       const r = await fetch(`${API}/api/stats`, { cache: 'no-store' });
       if (!r.ok) throw new Error(r.status);
@@ -454,6 +477,7 @@
     }
     renderAgentTag();
     renderNetTag();
+    poll.t = setTimeout(poll, agentOk ? 1000 : 5000);
   };
 
   // ---------- Bookmarks + tasks (persisted by the agent in data.json, cached in localStorage) ----------
@@ -770,7 +794,6 @@
   document.addEventListener('visibilitychange', () => (document.visibilityState === 'visible' ? enter() : leave()));
   clock(); loadConfig().then(weather); poll(); renderSpark(); renderMedia(); renderWave(false);
   setInterval(clock, 1000);
-  setInterval(poll, 1000);
   setInterval(() => { renderMedia(); }, 250);
   setInterval(() => renderWave(!!(media && media.playing)), 140);
   setInterval(weather, 15 * 60 * 1000);

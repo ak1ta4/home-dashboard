@@ -28,6 +28,17 @@ PORT = int(os.environ.get("HOME_PORT", "47800"))
 WEB_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web")
 ALLOWED_HOSTS = {f"127.0.0.1:{PORT}", f"localhost:{PORT}"}
 EXT_SCHEMES = ("moz-extension://", "chrome-extension://")
+
+
+def web_origins():
+    """Extra https origins allowed to call the agent (config.json "origins"),
+    e.g. the GitHub Pages copy of the dashboard."""
+    try:
+        with open(CONFIG_FILE, encoding="utf-8") as f:
+            return {o.rstrip("/") for o in json.load(f).get("origins", [])
+                    if isinstance(o, str) and o.startswith("https://")}
+    except (OSError, ValueError, AttributeError):
+        return set()
 NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 
 DATA_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data.json")
@@ -443,9 +454,11 @@ class Handler(SimpleHTTPRequestHandler):
 
     def _cors(self):
         origin = self.headers.get("Origin", "")
-        if origin.startswith(EXT_SCHEMES):
+        if origin.startswith(EXT_SCHEMES) or origin in web_origins():
             self.send_header("Access-Control-Allow-Origin", origin)
             self.send_header("Access-Control-Allow-Headers", "X-Home, Content-Type")
+            # Chrome asks before a public site may reach 127.0.0.1 (Private Network Access).
+            self.send_header("Access-Control-Allow-Private-Network", "true")
             self.send_header("Vary", "Origin")
 
     def _json(self, code, obj):

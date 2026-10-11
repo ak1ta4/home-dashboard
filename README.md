@@ -55,9 +55,17 @@ Crea el acceso directo `Home Agent` en `shell:startup`, que lanza `pythonw serve
   - Chrome / Edge / Brave: `chrome://extensions` → modo desarrollador → *Cargar descomprimida* → selecciona `web/`.
   - Firefox: solo instala de forma permanente extensiones firmadas. Puedes firmarla gratis como *unlisted* en [addons.mozilla.org](https://addons.mozilla.org/developers/) (o con `web-ext sign`), o cargarla temporalmente desde `about:debugging`.
 
+### Versión web (GitHub Pages)
+
+`web/` se publica automáticamente en **https://ak1ta4.github.io/home-dashboard/** con cada push (workflow `.github/workflows/pages.yml`).
+
+Sin el agente funcionan el reloj, el clima, el buscador con sugerencias de Google (vía JSONP), y las tareas y marcadores (guardados solo en ese navegador). Las tarjetas de sistema muestran `Agent offline`.
+
+Si abres esa URL en el PC donde corre el agente y su origen está en `origins` de `config.json`, la versión web también muestra tus datos reales (Chrome puede pedir permiso para acceder a la red local).
+
 ## Configuración
 
-- **Ubicación del clima**: copia `config.example.json` a `config.json` y pon tu ciudad, región y coordenadas. `config.json` está en `.gitignore`, así que tu ubicación no se sube. Sin ese archivo se usa Madrid.
+- **Ubicación del clima y orígenes permitidos**: copia `config.example.json` a `config.json` y pon tu ciudad, región y coordenadas, y en `origins` la URL de tu GitHub Pages. `config.json` está en `.gitignore`, así que tu ubicación no se sube. Sin ese archivo se usa Madrid.
 - **Puerto**: variable de entorno `HOME_PORT` (por defecto `47800`). Si lo cambias, actualiza también `API` en `web/app.js` para la versión extensión.
 
 ## Seguridad
