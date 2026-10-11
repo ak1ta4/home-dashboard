@@ -305,6 +305,22 @@ li.done .task-text { color: var(--disabled); text-decoration: line-through; text
 .list li:hover .key, .list li:focus-within .key { display: none; }
 .list li:not(:hover):not(:focus-within) .bm-x { width: 0; overflow: hidden; }
 @media (hover: none) { .key { display: none; } .list li .bm-x { width: 22px !important; } }
+/* Drag to reorder */
+#bm-list { user-select: none; -webkit-user-select: none; }
+.grip {
+  display: none; width: 8px; height: 12px; flex: none; cursor: grab;
+  background-image: radial-gradient(circle, var(--secondary) 1px, transparent 1.3px);
+  background-size: 4px 4px;
+}
+.list li:hover .grip, .list li:focus-within .grip { display: block; }
+@media (hover: none) { .grip { display: none !important; } }
+#bm-list.is-dragging, #bm-list.is-dragging * { cursor: grabbing !important; }
+#bm-list.is-dragging .x, #bm-list.is-dragging .grip { visibility: hidden; }
+#bm-list li.dragging { opacity: .3; }
+#bm-list .drop-marker { min-height: 0; height: 0; border: 0; position: relative; }
+#bm-list .drop-marker::before {
+  content: ""; position: absolute; left: 0; right: 0; top: -1px; height: 2px; border-radius: 1px; background: var(--orange);
+}
 .bm-form { display: grid; gap: 6px; margin-top: 12px; padding-bottom: 10px; border-bottom: 1px solid var(--border-hi); }
 .bm-form[hidden] { display: none; }
 .bm-form input { border-bottom: 1px solid var(--border); }

@@ -595,7 +595,9 @@
       const txt = el('span', 'bm-text');
       txt.append(el('span', 'bm-name', name), el('span', 'bm-host', hostOf(b.url)));
       a.append(el('span', 'mono', name.trim().charAt(0) || '•'), txt);
-      li.append(a, el('span', 'key', i < 9 ? String(i + 1) : ''), delBtn('x bm-x', `Borrar ${name}`));
+      const grip = el('span', 'grip');
+      grip.setAttribute('aria-hidden', 'true');
+      li.append(a, el('span', 'key', i < 9 ? String(i + 1) : ''), grip, delBtn('x bm-x', `Borrar ${name}`));
       list.append(li);
     });
     setText('bm-count', data.bookmarks.length);
@@ -629,11 +631,84 @@
     const m = e.target.closest('.bm');
     if (m && e.button === 1) { e.preventDefault(); openMark(m.dataset.url, true); }
   });
+  // Reorder: Alt+↑/↓ on a focused bookmark.
+  const moveMark = (id, delta) => {
+    const i = data.bookmarks.findIndex(b => b.id === id), j = i + delta;
+    if (i < 0 || j < 0 || j >= data.bookmarks.length) return;
+    const list = data.bookmarks.slice();
+    [list[i], list[j]] = [list[j], list[i]];
+    data.bookmarks = list;
+    save(); renderMarks();
+    $('bm-list').querySelector(`li[data-id="${id}"] .bm`)?.focus();
+  };
   $('bm-list').addEventListener('keydown', e => {
     const m = e.target.closest('.bm');
-    if (m && e.key === 'Enter') openMark(m.dataset.url, e.ctrlKey || e.metaKey);
+    if (!m) return;
+    if (e.key === 'Enter') openMark(m.dataset.url, e.ctrlKey || e.metaKey);
+    else if (e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+      e.preventDefault();
+      moveMark(m.closest('li').dataset.id, e.key === 'ArrowUp' ? -1 : 1);
+    }
   });
-  $('bm-list').addEventListener('click', e => {
+
+  // Reorder: drag with the mouse. A 6px threshold keeps plain clicks as clicks;
+  // an orange marker shows where the bookmark will land.
+  const bmList = $('bm-list');
+  let drag = null, suppressClick = false;
+  const endDrag = commit => {
+    const d = drag;
+    drag = null;
+    if (!d || !d.active) return;
+    suppressClick = true;
+    setTimeout(() => { suppressClick = false; }, 0);
+    bmList.classList.remove('is-dragging');
+    d.li.classList.remove('dragging');
+    if (commit && d.marker.parentNode) {
+      bmList.insertBefore(d.li, d.marker);
+      const order = [...bmList.querySelectorAll('li[data-id]')].map(li => li.dataset.id);
+      const byId = new Map(data.bookmarks.map(b => [b.id, b]));
+      const next = order.map(id => byId.get(id)).filter(Boolean);
+      if (next.length === data.bookmarks.length && next.some((b, i) => b !== data.bookmarks[i])) {
+        data.bookmarks = next;
+        save();
+      }
+    }
+    d.marker.remove();
+    renderMarks();
+  };
+  bmList.addEventListener('pointerdown', e => {
+    if (e.button !== 0 || e.target.closest('[data-act="del"]')) return;
+    const li = e.target.closest('li[data-id]');
+    if (li) drag = { li, startY: e.clientY, pointerId: e.pointerId, active: false };
+  });
+  bmList.addEventListener('pointermove', e => {
+    if (!drag) return;
+    if (!drag.active) {
+      if (Math.abs(e.clientY - drag.startY) < 6) return;
+      drag.active = true;
+      drag.marker = el('li', 'drop-marker');
+      drag.marker.setAttribute('aria-hidden', 'true');
+      bmList.setPointerCapture(drag.pointerId);
+      bmList.classList.add('is-dragging');
+      drag.li.classList.add('dragging');
+    }
+    e.preventDefault();
+    const box = bmList.getBoundingClientRect();
+    if (e.clientY < box.top + 28) bmList.scrollTop -= 8;
+    else if (e.clientY > box.bottom - 28) bmList.scrollTop += 8;
+    const before = [...bmList.querySelectorAll('li[data-id]')].find(li => {
+      const r = li.getBoundingClientRect();
+      return e.clientY < r.top + r.height / 2;
+    });
+    if (before) { if (drag.marker.nextSibling !== before) bmList.insertBefore(drag.marker, before); }
+    else if (bmList.lastChild !== drag.marker) bmList.append(drag.marker);
+  });
+  bmList.addEventListener('pointerup', () => endDrag(true));
+  bmList.addEventListener('pointercancel', () => endDrag(false));
+  document.addEventListener('keydown', e => { if (drag && drag.active && e.key === 'Escape') endDrag(false); }, true);
+
+  bmList.addEventListener('click', e => {
+    if (suppressClick) return;
     const m = e.target.closest('.bm');
     if (m) { openMark(m.dataset.url, e.ctrlKey || e.metaKey || e.shiftKey); return; }
     const b = e.target.closest('[data-act="del"]');
