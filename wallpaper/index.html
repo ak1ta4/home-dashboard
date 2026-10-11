@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Home / System 01</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+  iframe { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; display: block; background: #000; }
+  iframe[hidden], #off[hidden] { display: none; }
+  #off {
+    position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+    font-family: "Space Mono", ui-monospace, monospace; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: #555;
+  }
+  #off b { color: #E8E8E8; font-weight: 400; }
+  #off .rec { width: 8px; height: 8px; border-radius: 50%; background: #D71921; }
+</style>
+</head>
+<body>
+  <div id="off"><span class="rec"></span><b>Agent offline</b><span>Start server.py · retrying every 5 s</span></div>
+  <iframe id="dash" title="Home dashboard" hidden></iframe>
+<script>
+  // Wallpaper Engine shell: the dashboard itself is served by the local agent,
+  // so the wallpaper always matches the browser version and shows live data.
+  const AGENT = 'http://127.0.0.1:47800';
+  const frame = document.getElementById('dash');
+  const off = document.getElementById('off');
+  let up = false;
+
+  async function check() {
+    let ok = false;
+    try {
+      await fetch(AGENT + '/api/stats', { mode: 'no-cors', cache: 'no-store' }); // opaque, but resolves only if the agent answers
+      ok = true;
+    } catch {}
+    if (ok && !up) frame.src = AGENT + '/?mode=wallpaper';
+    if (!ok && up) frame.removeAttribute('src');
+    up = ok;
+    frame.hidden = !up;
+    off.hidden = up;
+  }
+  check();
+  setInterval(check, 5000);
+
+  // Real system audio → the "Now playing" bars (needs supportsaudioprocessing in project.json).
+  if (window.wallpaperRegisterAudioListener) {
+    window.wallpaperRegisterAudioListener(audio => {
+      if (up && frame.contentWindow) frame.contentWindow.postMessage({ type: 'we-audio', bins: Array.from(audio) }, AGENT);
+    });
+  }
+</script>
+</body>
+</html>

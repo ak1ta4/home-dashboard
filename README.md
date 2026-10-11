@@ -63,6 +63,12 @@ Sin el agente funcionan el reloj, el clima, el buscador con sugerencias de Googl
 
 Si abres esa URL en el PC donde corre el agente y su origen está en `origins` de `config.json`, la versión web también muestra tus datos reales (Chrome puede pedir permiso para acceder a la red local).
 
+### Wallpaper (Wallpaper Engine)
+
+`wallpaper/` es un wallpaper *web* para [Wallpaper Engine](https://www.wallpaperengine.io/): carga el dashboard del agente en modo `?mode=wallpaper`, sin buscador ni marcadores (Wallpaper Engine no pasa el teclado a los wallpapers). Las tareas se pueden marcar y borrar con el ratón, y las que añadas desde el navegador aparecen en el wallpaper. Las barras de *Now playing* se mueven con el **audio real** del sistema.
+
+Para instalarlo, copia la carpeta `wallpaper/` dentro de `wallpaper_engine\projects\myprojects\` (en tu biblioteca de Steam), o en Wallpaper Engine usa *Crear wallpaper* → selecciona `wallpaper/index.html`. Necesita el agente en marcha; si no responde, muestra `Agent offline` y lo reintenta cada 5 s.
+
 ## Configuración
 
 - **Ubicación del clima y orígenes permitidos**: copia `config.example.json` a `config.json` y pon tu ciudad, región y coordenadas, y en `origins` la URL de tu GitHub Pages. `config.json` está en `.gitignore`, así que tu ubicación no se sube. Sin ese archivo se usa Madrid.
@@ -83,6 +89,7 @@ server.py              agente local: estáticos + /api/stats, /api/data, /api/me
                        /api/suggest, /api/config
 config.example.json    plantilla de config.json (ubicación del clima)
 install-autostart.ps1  acceso directo en el Inicio de Windows
+wallpaper/              wallpaper web para Wallpaper Engine (index.html + project.json)
 requirements.txt
 web/
   index.html  style.css  app.js

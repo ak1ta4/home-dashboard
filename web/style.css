@@ -367,3 +367,24 @@ li.done .task-text { color: var(--disabled); text-decoration: line-through; text
 @media (max-width: 1040px), (max-height: 600px) {
   .a-todo, .a-marks { min-height: 240px; max-height: 440px; }
 }
+
+/* ---------- Wallpaper Engine mode (?mode=wallpaper) ----------
+   No keyboard reaches a wallpaper: drop search, bookmarks and text inputs;
+   tasks stay (tick / delete / clear with the mouse) and take the right column. */
+html.wallpaper .a-search, html.wallpaper .a-marks, html.wallpaper .add-row { display: none; }
+html.wallpaper .grid {
+  grid-template-rows: repeat(4, minmax(0, 1fr));
+  grid-template-areas:
+    "time time cpu mem todo"
+    "time time np  np  todo"
+    "wx   net  sys sys todo"
+    "sto  sto  st  gpu todo";
+}
+html.wallpaper .task-text { cursor: default; }
+html.wallpaper .wave i { transition: none; } /* bars follow live audio at ~30 fps */
+@media (max-width: 1040px), (max-height: 600px) {
+  html.wallpaper .grid {
+    grid-template-rows: none;
+    grid-template-areas: "time time" "todo todo" "cpu mem" "np np" "wx net" "sys sys" "sto sto" "st gpu";
+  }
+}

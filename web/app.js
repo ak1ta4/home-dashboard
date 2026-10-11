@@ -4,6 +4,10 @@
   const AGENT = 'http://127.0.0.1:47800';
   const API = location.origin === AGENT || location.origin === 'http://localhost:47800' ? '' : AGENT;
   const IS_WEB = location.protocol === 'https:' || location.protocol === 'http:';
+  // Wallpaper Engine (wallpaper/index.html loads ?mode=wallpaper): it forwards the mouse but
+  // never the keyboard, so search, bookmarks and text inputs are hidden.
+  const WALLPAPER = new URLSearchParams(location.search).get('mode') === 'wallpaper';
+  if (WALLPAPER) document.documentElement.classList.add('wallpaper');
   // Default location; override locally in config.json (served by the agent, git-ignored).
   let WX = { city: 'Madrid', region: 'Spain', lat: 40.4168, lon: -3.7038 };
 
@@ -345,12 +349,34 @@
   const wave = $('wave');
   wave.innerHTML = '<i></i>'.repeat(BARS);
   let waveH = Array.from({ length: BARS }, () => .2 + Math.random() * .8);
-  let media = null, mediaAt = 0;
+  let media = null, mediaAt = 0, audioAt = 0;
   const renderWave = playing => {
+    if (performance.now() - audioAt < 400) return; // real audio is driving the bars
     if (playing) waveH = waveH.slice(1).concat(.15 + Math.random() * .85);
     [...wave.children].forEach((b, i) => { b.style.height = (playing ? waveH[i] * 100 : 6) + '%'; });
     wave.classList.toggle('idle', !playing);
   };
+  // Wallpaper Engine audio: the wrapper page forwards its 128-value spectrum
+  // (64 left + 64 right, bass first) via postMessage at ~30 fps.
+  if (WALLPAPER) {
+    const drawAudio = bins => {
+      let energy = 0;
+      [...wave.children].forEach((b, i) => {
+        const k = Math.min(63, Math.floor(i * 64 / BARS));
+        const v = Math.min(1, Math.pow(Math.max(0, (bins[k] + bins[64 + k]) / 2), 0.7));
+        energy += v;
+        b.style.height = Math.max(4, v * 100).toFixed(1) + '%';
+      });
+      wave.classList.toggle('idle', energy / BARS < 0.02);
+    };
+    addEventListener('message', e => {
+      const d = e.data;
+      if (e.source !== window.parent || !d || d.type !== 'we-audio' || !Array.isArray(d.bins) || d.bins.length !== 128) return;
+      audioAt = performance.now();
+      drawAudio(d.bins.map(Number)); // messages already arrive at ~30 fps
+    });
+  }
+
   const renderMedia = () => {
     const m = media;
     const has = !!(m && m.title);
@@ -586,6 +612,7 @@
     save(); renderTodos();
   });
   $('todo-list').addEventListener('dblclick', e => {
+    if (WALLPAPER) return; // no keyboard to edit with
     const span = e.target.closest('.task-text');
     if (!span) return;
     const t = findTodo(span);
@@ -774,7 +801,9 @@
 
   // ---------- Loops ----------
   loadData();
-  q.focus(); // after everything above exists (focus may trigger autocomplete)
+  if (!WALLPAPER) q.focus(); // after everything above exists (focus may trigger autocomplete)
+  // The wallpaper never becomes "visible again", so pick up browser edits periodically.
+  if (WALLPAPER) setInterval(() => { if (!pendingSync) loadData(); }, 10000);
 
   // Switching tabs / windows: leaving releases the search box (no caret left
   // blinking, no highlighted card); coming back puts the caret straight in it —
@@ -789,9 +818,11 @@
     const a = document.activeElement;
     if (!a || a === document.body) q.focus({ preventScroll: true });
   };
-  addEventListener('blur', leave);
-  addEventListener('focus', enter);
-  document.addEventListener('visibilitychange', () => (document.visibilityState === 'visible' ? enter() : leave()));
+  if (!WALLPAPER) {
+    addEventListener('blur', leave);
+    addEventListener('focus', enter);
+    document.addEventListener('visibilitychange', () => (document.visibilityState === 'visible' ? enter() : leave()));
+  }
   clock(); loadConfig().then(weather); poll(); renderSpark(); renderMedia(); renderWave(false);
   setInterval(clock, 1000);
   setInterval(() => { renderMedia(); }, 250);
