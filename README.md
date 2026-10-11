@@ -14,7 +14,7 @@ Página de inicio / nueva pestaña para Windows, a pantalla completa y en modo o
 | Sistema: host, uptime, IP local, procesos | `psutil` |
 | Now playing con anterior / pausa / siguiente | controles multimedia de Windows (SMTC); si Spotify no publica ahí, se lee el título de su ventana y se controla con las teclas multimedia |
 | Clima (por defecto Madrid, configurable) | [Open‑Meteo](https://open-meteo.com) (sin API key) |
-| Tareas: añadir, completar, editar con doble clic, limpiar hechas | `data.json` vía el agente |
+| Tareas: añadir, completar, editar (botón de lápiz o doble clic), limpiar hechas | `data.json` vía el agente |
 | Marcadores numerados con atajos `1`–`9` y `0` (10.º), reordenables arrastrando (o con `Alt+↑/↓`) | `data.json` vía el agente |
 
 Atajos (fuera de un campo de texto): `/` buscar · `T` nueva tarea · `1`–`9`, `0` abrir marcador · `F` pantalla completa · `Esc` salir del campo.
@@ -46,7 +46,7 @@ Abre <http://127.0.0.1:47800>.
 powershell -NoProfile -ExecutionPolicy Bypass -File .\install-autostart.ps1
 ```
 
-Crea el acceso directo `Home Agent` en `shell:startup`, que lanza `pythonw server.py` sin ventana. Para quitarlo, borra ese acceso directo.
+Crea el acceso directo `Home Agent` en `shell:startup`, que lanza `pythonw server.py` sin ventana, y arranca el agente si no estaba ya en marcha. Localiza `pythonw.exe` aunque Python no esté en el `PATH` (lo busca en el registro de Windows). Para quitarlo, borra ese acceso directo.
 
 ### Usarlo en el navegador
 
@@ -65,7 +65,9 @@ Si abres esa URL en el PC donde corre el agente y su origen está en `origins` d
 
 ### Wallpaper (Wallpaper Engine)
 
-`wallpaper/` es un wallpaper *web* para [Wallpaper Engine](https://www.wallpaperengine.io/): carga el dashboard del agente en modo `?mode=wallpaper`, sin buscador ni marcadores (Wallpaper Engine no pasa el teclado a los wallpapers). Las tareas se pueden marcar y borrar con el ratón, y las que añadas desde el navegador aparecen en el wallpaper. Las barras de *Now playing* se mueven con el **audio real** del sistema.
+`wallpaper/` es un wallpaper *web* para [Wallpaper Engine](https://www.wallpaperengine.io/). Cuando el agente responde, navega al dashboard en modo `?mode=wallpaper` (sin iframe: el CEF de Wallpaper Engine se cuelga con un marco de otro origen), sin buscador ni marcadores. Las barras de *Now playing* se mueven con el **audio real** del sistema.
+
+Las tareas se escriben en la propia tarjeta. Wallpaper Engine no pasa el teclado a los wallpapers, así que, al enfocar el campo, la página pide al agente que capture las pulsaciones con un *hook* de teclado de Windows y se las envíe (acentos, AltGr, flechas, Ctrl+V…). La captura solo arranca si el escritorio está en primer plano y termina al cambiar de ventana, con Esc, Win, Alt+Tab, al salir del campo o tras 2 min sin teclear; mientras dura, las teclas no llegan a otros programas y no se guardan. `%TEMP%\home_keys.log` registra cuándo empieza y termina la captura y cuántas teclas recibió, nunca cuáles.
 
 Para instalarlo, copia la carpeta `wallpaper/` dentro de `wallpaper_engine\projects\myprojects\` (en tu biblioteca de Steam), o en Wallpaper Engine usa *Crear wallpaper* → selecciona `wallpaper/index.html`. Necesita el agente en marcha; si no responde, muestra `Agent offline` y lo reintenta cada 5 s.
 
@@ -79,6 +81,7 @@ Para instalarlo, copia la carpeta `wallpaper/` dentro de `wallpaper_engine\proje
 - El agente solo escucha en `127.0.0.1` y rechaza peticiones con otra cabecera `Host` (protección contra DNS rebinding).
 - Las escrituras (`PUT /api/data`, `POST /api/media/*`) exigen la cabecera `X-Home: 1`, lo que fuerza un preflight CORS que solo se acepta para orígenes `moz-extension://` y `chrome-extension://`. Otras webs no pueden leer tus datos ni controlar tu música.
 - Los marcadores solo aceptan URLs `http(s)`.
+- La captura de teclado del wallpaper (`/api/keys`) solo la puede pedir la página servida por el propio agente (mismo origen + `X-Home`) y solo mientras el escritorio está delante.
 - `data.json` (tus tareas y marcadores) y `config.json` (tu ubicación) están en `.gitignore`. Las búsquedas recientes solo se guardan en el `localStorage` del navegador.
 - Mientras escribes en el buscador, el texto se envía a Google para obtener sugerencias (igual que hace la barra del navegador).
 

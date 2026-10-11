@@ -356,8 +356,8 @@
     [...wave.children].forEach((b, i) => { b.style.height = (playing ? waveH[i] * 100 : 6) + '%'; });
     wave.classList.toggle('idle', !playing);
   };
-  // Wallpaper Engine audio: the wrapper page forwards its 128-value spectrum
-  // (64 left + 64 right, bass first) via postMessage at ~30 fps.
+  // Wallpaper Engine audio: a 128-value spectrum (64 left + 64 right, bass first)
+  // at ~30 fps, from its own API on this page or posted by an embedding parent.
   if (WALLPAPER) {
     const drawAudio = bins => {
       let energy = 0;
@@ -369,11 +369,15 @@
       });
       wave.classList.toggle('idle', energy / BARS < 0.02);
     };
+    const onAudio = a => {
+      if (!a || a.length < 128) return;
+      audioAt = performance.now();
+      drawAudio(Array.from(a, Number)); // already ~30 fps, draw straight away
+    };
+    if (typeof window.wallpaperRegisterAudioListener === 'function') window.wallpaperRegisterAudioListener(onAudio);
     addEventListener('message', e => {
       const d = e.data;
-      if (e.source !== window.parent || !d || d.type !== 'we-audio' || !Array.isArray(d.bins) || d.bins.length !== 128) return;
-      audioAt = performance.now();
-      drawAudio(d.bins.map(Number)); // messages already arrive at ~30 fps
+      if (e.source === window.parent && d && d.type === 'we-audio' && Array.isArray(d.bins)) onAudio(d.bins);
     });
   }
 
@@ -536,6 +540,7 @@
     clearTimeout(saveTimer);
     saveTimer = setTimeout(pushRemote, 250);
   };
+  let rendered = '';
   const loadData = async () => {
     let remote = null;
     try {
@@ -550,6 +555,10 @@
       data = valid(local) ? local : { bookmarks: DEFAULT_MARKS, todos: [] };
       if (remote) save(); // agent reachable but no data.json yet → seed it
     }
+    // Only redraw when something changed, so a periodic refresh never eats a click.
+    const now = JSON.stringify(data);
+    if (now === rendered) return;
+    rendered = now;
     renderTodos(); renderMarks();
   };
 
@@ -570,6 +579,7 @@
   };
 
   // Tasks
+  const ICON_EDIT = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10.5 3.5l2 2L6 12H4v-2zM9 5l2 2"/></svg>';
   const renderTodos = () => {
     const list = $('todo-list');
     list.textContent = '';
@@ -583,7 +593,11 @@
       chk.setAttribute('aria-label', t.text);
       chk.dataset.act = 'toggle';
       const txt = el('span', 'task-text', t.text);
-      li.append(chk, txt, delBtn('x', 'Borrar tarea'));
+      const edit = el('button', 'x edit');
+      edit.innerHTML = ICON_EDIT;
+      edit.setAttribute('aria-label', 'Editar tarea');
+      edit.dataset.act = 'edit';
+      li.append(chk, txt, edit, delBtn('x', 'Borrar tarea'));
       list.append(li);
     }
     const total = data.todos.length, done = data.todos.filter(t => t.done).length;
@@ -594,6 +608,56 @@
   };
   const findTodo = node => data.todos.find(t => t.id === node.closest('li').dataset.id);
 
+  // Wallpaper Engine never forwards the keyboard. When a text field in the wallpaper
+  // gets focus, the agent reads keystrokes for us (only while the desktop is in front)
+  // and streams them here; they are applied to the field as if typed.
+  let capEl = null, capRun = 0;
+  const applyKey = (inp, kind, value) => {
+    const s = inp.selectionStart ?? inp.value.length, e = inp.selectionEnd ?? s;
+    const edit = (text, from, to) => { inp.setRangeText(text, from, to, 'end'); inp.dispatchEvent(new Event('input', { bubbles: true })); };
+    if (kind === 'text') edit(value.replace(/[\r\n\t]+/g, ' ').slice(0, Math.max(0, inp.maxLength > 0 ? inp.maxLength - inp.value.length + (e - s) : 500)), s, e);
+    else if (value === 'Backspace') { if (s !== e) edit('', s, e); else if (s > 0) edit('', s - 1, s); }
+    else if (value === 'Delete') { if (s !== e) edit('', s, e); else if (s < inp.value.length) edit('', s, s + 1); }
+    else if (value === 'ArrowLeft') inp.setSelectionRange(Math.max(0, s === e ? s - 1 : s), Math.max(0, s === e ? s - 1 : s));
+    else if (value === 'ArrowRight') inp.setSelectionRange(Math.min(inp.value.length, s === e ? e + 1 : e), Math.min(inp.value.length, s === e ? e + 1 : e));
+    else if (value === 'Home' || value === 'ArrowUp') inp.setSelectionRange(0, 0);
+    else if (value === 'End' || value === 'ArrowDown') inp.setSelectionRange(inp.value.length, inp.value.length);
+    else if (value === 'SelectAll') inp.select();
+    else if (value === 'Enter') { if (inp.form) inp.form.requestSubmit(); else inp.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); }
+    else if (value === 'Escape') { inp.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); if (document.activeElement === inp) inp.blur(); }
+  };
+  const startCapture = async inp => {
+    const run = ++capRun;
+    capEl = inp;
+    let since;
+    try {
+      const r = await (await fetch(`${API}/api/keys/start`, { method: 'POST', headers: { 'X-Home': '1' } })).json();
+      if (!r.ok) return; // not clicked from the wallpaper (e.g. a normal browser): native typing works
+      since = r.seq;
+    } catch { return; }
+    while (run === capRun && document.activeElement === inp) {
+      let j;
+      try { j = await (await fetch(`${API}/api/keys?since=${since}`, { headers: { 'X-Home': '1' }, cache: 'no-store' })).json(); }
+      catch { break; }
+      for (const [seq, kind, value] of j.events) {
+        since = seq;
+        if (run !== capRun || document.activeElement !== inp) break;
+        applyKey(inp, kind, value);
+      }
+      if (!j.active) break;
+    }
+    if (run === capRun && document.activeElement === inp) inp.blur(); // capture ended by the agent (Esc, Alt+Tab…)
+  };
+  const stopCapture = () => {
+    capRun++;
+    capEl = null;
+    fetch(`${API}/api/keys/stop`, { method: 'POST', headers: { 'X-Home': '1' } }).catch(() => {});
+  };
+  if (WALLPAPER) {
+    document.addEventListener('focusin', e => { if (e.target.matches('#todo-input, .task-edit')) startCapture(e.target); });
+    document.addEventListener('focusout', e => { if (e.target === capEl) stopCapture(); });
+  }
+
   $('todo-form').addEventListener('submit', e => {
     e.preventDefault();
     const inp = $('todo-input'), v = inp.value.trim();
@@ -602,20 +666,10 @@
     inp.value = '';
     save(); renderTodos();
   });
-  $('todo-list').addEventListener('click', e => {
-    const b = e.target.closest('[data-act]');
-    if (!b) return;
-    const t = findTodo(b);
-    if (!t) return;
-    if (b.dataset.act === 'toggle') t.done = !t.done;
-    else data.todos = data.todos.filter(x => x !== t);
-    save(); renderTodos();
-  });
-  $('todo-list').addEventListener('dblclick', e => {
-    if (WALLPAPER) return; // no keyboard to edit with
-    const span = e.target.closest('.task-text');
-    if (!span) return;
+
+  const startEdit = span => {
     const t = findTodo(span);
+    if (!t) return;
     const inp = el('input', 'task-edit');
     inp.value = t.text;
     inp.maxLength = 500;
@@ -635,6 +689,20 @@
       if (ev.key === 'Escape') { ev.stopPropagation(); finish(false); }
     });
     inp.addEventListener('blur', () => finish(true));
+  };
+  $('todo-list').addEventListener('click', e => {
+    const b = e.target.closest('[data-act]');
+    if (!b) return;
+    const t = findTodo(b);
+    if (!t) return;
+    if (b.dataset.act === 'edit') { startEdit(b.closest('li').querySelector('.task-text')); return; }
+    if (b.dataset.act === 'toggle') t.done = !t.done;
+    else data.todos = data.todos.filter(x => x !== t);
+    save(); renderTodos();
+  });
+  $('todo-list').addEventListener('dblclick', e => {
+    const span = e.target.closest('.task-text');
+    if (span) startEdit(span);
   });
   $('todo-clear').addEventListener('click', () => {
     data.todos = data.todos.filter(t => !t.done);
@@ -803,7 +871,7 @@
   loadData();
   if (!WALLPAPER) q.focus(); // after everything above exists (focus may trigger autocomplete)
   // The wallpaper never becomes "visible again", so pick up browser edits periodically.
-  if (WALLPAPER) setInterval(() => { if (!pendingSync) loadData(); }, 10000);
+  if (WALLPAPER) setInterval(() => { if (!pendingSync && !document.querySelector('.task-edit')) loadData(); }, 10000);
 
   // Switching tabs / windows: leaving releases the search box (no caret left
   // blinking, no highlighted card); coming back puts the caret straight in it —

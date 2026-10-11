@@ -256,6 +256,7 @@ kbd { font-family: var(--font-mono); border: 1px solid var(--border-hi); border-
 }
 .x svg { width: 10px; height: 10px; fill: none; stroke: currentColor; stroke-width: 1.6; }
 .x:hover { color: var(--red); }
+.x.edit:hover { color: var(--primary); }
 .list li:hover .x, .list li:focus-within .x { opacity: 1; }
 @media (hover: none) { .x { opacity: 1; } }
 .empty { margin: auto 0; text-align: center; padding: 12px 0; }
@@ -371,7 +372,7 @@ li.done .task-text { color: var(--disabled); text-decoration: line-through; text
 /* ---------- Wallpaper Engine mode (?mode=wallpaper) ----------
    No keyboard reaches a wallpaper: drop search, bookmarks and text inputs;
    tasks stay (tick / delete / clear with the mouse) and take the right column. */
-html.wallpaper .a-search, html.wallpaper .a-marks, html.wallpaper .add-row { display: none; }
+html.wallpaper .a-search, html.wallpaper .a-marks { display: none; }
 html.wallpaper .grid {
   grid-template-rows: repeat(4, minmax(0, 1fr));
   grid-template-areas:
@@ -380,7 +381,6 @@ html.wallpaper .grid {
     "wx   net  sys sys todo"
     "sto  sto  st  gpu todo";
 }
-html.wallpaper .task-text { cursor: default; }
 html.wallpaper .wave i { transition: none; } /* bars follow live audio at ~30 fps */
 @media (max-width: 1040px), (max-height: 600px) {
   html.wallpaper .grid {

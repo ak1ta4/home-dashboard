@@ -441,6 +441,212 @@ def media_action(action):
         return False
 
 
+# ---------- Keyboard capture for the wallpaper ----------
+# Wallpaper Engine forwards the mouse to web wallpapers but never the keyboard.
+# When a text field in the wallpaper is focused, the page asks the agent to read
+# keystrokes with a low-level hook and stream them back, so you type straight into
+# the card. Capture only starts while the desktop (the wallpaper) is the foreground
+# window, and ends on focus change, Esc, Win, Alt+Tab, page request or 2 min idle.
+# Keys are swallowed while capturing and never stored or logged.
+class KBDLLHOOKSTRUCT(ctypes.Structure):
+    _fields_ = [("vkCode", wintypes.DWORD), ("scanCode", wintypes.DWORD), ("flags", wintypes.DWORD),
+                ("time", wintypes.DWORD), ("dwExtraInfo", ctypes.c_void_p)]
+
+
+_LRESULT = ctypes.c_ssize_t
+_HOOKPROC = ctypes.WINFUNCTYPE(_LRESULT, ctypes.c_int, wintypes.WPARAM, wintypes.LPARAM)
+_u32 = ctypes.WinDLL("user32", use_last_error=True)
+_k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+_u32.SetWindowsHookExW.argtypes = [ctypes.c_int, _HOOKPROC, wintypes.HINSTANCE, wintypes.DWORD]
+_u32.SetWindowsHookExW.restype = ctypes.c_void_p
+_u32.CallNextHookEx.argtypes = [ctypes.c_void_p, ctypes.c_int, wintypes.WPARAM, wintypes.LPARAM]
+_u32.CallNextHookEx.restype = _LRESULT
+_u32.GetForegroundWindow.restype = ctypes.c_void_p
+_u32.GetWindowThreadProcessId.argtypes = [ctypes.c_void_p, ctypes.POINTER(wintypes.DWORD)]
+_u32.GetClassNameW.argtypes = [ctypes.c_void_p, wintypes.LPWSTR, ctypes.c_int]
+_u32.GetKeyboardLayout.restype = ctypes.c_void_p
+_u32.ToUnicodeEx.argtypes = [wintypes.UINT, wintypes.UINT, ctypes.POINTER(ctypes.c_ubyte), wintypes.LPWSTR,
+                             ctypes.c_int, wintypes.UINT, ctypes.c_void_p]
+_u32.GetClipboardData.restype = ctypes.c_void_p
+_k32.GetModuleHandleW.restype = wintypes.HMODULE
+_k32.GlobalLock.argtypes = [ctypes.c_void_p]
+_k32.GlobalLock.restype = ctypes.c_void_p
+_k32.GlobalUnlock.argtypes = [ctypes.c_void_p]
+
+NAMED_KEYS = {0x0D: "Enter", 0x1B: "Escape", 0x08: "Backspace", 0x2E: "Delete", 0x25: "ArrowLeft",
+              0x27: "ArrowRight", 0x24: "Home", 0x23: "End", 0x09: "Tab", 0x26: "ArrowUp", 0x28: "ArrowDown"}
+MODIFIERS = {0x10, 0xA0, 0xA1, 0x11, 0xA2, 0xA3, 0x12, 0xA4, 0xA5, 0x14}
+DESKTOP_CLASSES = {"Progman", "WorkerW"}
+WALLPAPER_EXES = {"wallpaper64.exe", "wallpaper32.exe"}
+
+
+def _clipboard_text():
+    if not _u32.OpenClipboard(None):
+        return ""
+    try:
+        h = _u32.GetClipboardData(13)  # CF_UNICODETEXT
+        p = _k32.GlobalLock(h) if h else None
+        if not p:
+            return ""
+        try:
+            return ctypes.wstring_at(p)[:500]
+        finally:
+            _k32.GlobalUnlock(h)
+    finally:
+        _u32.CloseClipboard()
+
+
+KEYS_LOG = os.path.join(os.environ.get("TEMP", "."), "home_keys.log")
+
+
+def _keys_log(msg):
+    """Diagnostics only: when capture starts/stops and how many keys — never which ones."""
+    try:
+        with open(KEYS_LOG, "a", encoding="utf-8") as f:
+            f.write(time.strftime("%Y-%m-%d %H:%M:%S ") + msg + "\n")
+    except OSError:
+        pass
+
+
+class KeyCapture:
+    IDLE = 120  # seconds without a keystroke before capture ends by itself
+
+    def __init__(self):
+        self.cond = threading.Condition()
+        self.events, self.seq = [], 0
+        self.active, self.fg, self.deadline, self.layout = False, None, 0.0, None
+        self.shift = self.ctrl = self.lalt = self.altgr = False
+        self.caps = 0
+        self._proc = _HOOKPROC(self._hook)  # keep a reference: Windows calls into it
+        self._thread = None
+
+    @staticmethod
+    def _describe(hwnd):
+        buf = ctypes.create_unicode_buffer(64)
+        _u32.GetClassNameW(hwnd, buf, 64)
+        pid = wintypes.DWORD()
+        _u32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+        try:
+            name = psutil.Process(pid.value).name()
+        except psutil.Error:
+            name = "?"
+        return buf.value, name
+
+    def _desktop_in_front(self, hwnd):
+        if not hwnd:
+            return False
+        cls, exe = self._describe(hwnd)
+        return cls in DESKTOP_CLASSES or exe.lower() in WALLPAPER_EXES
+
+    def start(self):
+        fg = _u32.GetForegroundWindow()
+        ok = self._desktop_in_front(fg)
+        cls, exe = self._describe(fg) if fg else ("-", "-")
+        _keys_log(f"start {'OK' if ok else 'refused'} · foreground {cls} / {exe}")
+        if not ok:
+            return False, self.seq  # not clicked from the wallpaper: let the page type natively
+        if self._thread is None:
+            self._thread = threading.Thread(target=self._loop, daemon=True)
+            self._thread.start()
+        with self.cond:
+            self.active, self.fg = True, fg
+            self.deadline = time.time() + self.IDLE
+            self.layout = _u32.GetKeyboardLayout(_u32.GetWindowThreadProcessId(fg, None))
+            self.caps = _u32.GetKeyState(0x14) & 1
+            self.shift = self.ctrl = self.lalt = self.altgr = False
+            self._start_seq = self.seq
+            self.cond.notify_all()
+            return True, self.seq
+
+    def stop(self):
+        with self.cond:
+            if self.active:
+                _keys_log(f"stop · {self.seq - getattr(self, '_start_seq', self.seq)} key events")
+            self.active = False
+            self.cond.notify_all()
+
+    def poll(self, since, timeout=1.0):
+        with self.cond:
+            self.cond.wait_for(lambda: self.seq > since or not self.active, timeout)
+            return [e for e in self.events if e[0] > since], self.active
+
+    def _emit(self, kind, value):
+        with self.cond:
+            self.seq += 1
+            self.events = self.events[-200:] + [(self.seq, kind, value)]
+            self.cond.notify_all()
+
+    def _loop(self):
+        hook = _u32.SetWindowsHookExW(13, self._proc, _k32.GetModuleHandleW(None), 0)  # WH_KEYBOARD_LL
+        _keys_log("keyboard hook " + ("installed" if hook else f"FAILED (error {ctypes.get_last_error()})"))
+        if not hook:
+            return
+        msg = wintypes.MSG()
+        while _u32.GetMessageW(ctypes.byref(msg), None, 0, 0) > 0:
+            pass
+
+    def _hook(self, n, wparam, lparam):
+        if n < 0 or not self.active:
+            return _u32.CallNextHookEx(None, n, wparam, lparam)
+        kb = ctypes.cast(lparam, ctypes.POINTER(KBDLLHOOKSTRUCT)).contents
+        if kb.flags & 0x10:  # injected by software: leave alone
+            return _u32.CallNextHookEx(None, n, wparam, lparam)
+        vk, down = kb.vkCode, wparam in (0x100, 0x104)
+
+        # Modifiers are tracked and passed through untouched.
+        if vk in MODIFIERS:
+            if vk in (0x10, 0xA0, 0xA1):
+                self.shift = down
+            elif vk in (0x11, 0xA2, 0xA3):
+                self.ctrl = down
+            elif vk in (0x12, 0xA4):
+                self.lalt = down
+            elif vk == 0xA5:
+                self.altgr = down
+            elif vk == 0x14 and down:
+                self.caps ^= 1
+            return _u32.CallNextHookEx(None, n, wparam, lparam)
+
+        # Anything that means "I'm leaving" ends the capture and goes through.
+        if (vk in (0x5B, 0x5C) or (self.lalt and not self.altgr) or time.time() > self.deadline
+                or _u32.GetForegroundWindow() != self.fg):
+            self.stop()
+            return _u32.CallNextHookEx(None, n, wparam, lparam)
+        if not down:
+            return 1
+        self.deadline = time.time() + self.IDLE
+
+        if vk in NAMED_KEYS:
+            self._emit("key", NAMED_KEYS[vk])
+            if vk == 0x1B:
+                self.stop()
+        elif self.ctrl and not self.altgr:
+            if vk == 0x56:  # Ctrl+V
+                text = _clipboard_text()
+                if text:
+                    self._emit("text", text)
+            elif vk == 0x41:  # Ctrl+A
+                self._emit("key", "SelectAll")
+        else:
+            state = (ctypes.c_ubyte * 256)()
+            if self.shift:
+                state[0x10] = 0x80
+            if self.caps:
+                state[0x14] = 0x01
+            if self.altgr:
+                state[0x11] = state[0x12] = state[0xA2] = state[0xA5] = 0x80
+            buf = ctypes.create_unicode_buffer(8)
+            got = _u32.ToUnicodeEx(vk, kb.scanCode, state, buf, 8, 0, self.layout)  # keeps dead-key state (´ + a = á)
+            if got > 0:
+                text = "".join(ch for ch in buf.value[:got] if ch.isprintable())
+                if text:
+                    self._emit("text", text)
+        return 1  # swallowed: the desktop doesn't get it
+
+
+keys = KeyCapture()
+
+
 # ---------- HTTP ----------
 class Handler(SimpleHTTPRequestHandler):
     def __init__(self, *a, **kw):
@@ -451,6 +657,10 @@ class Handler(SimpleHTTPRequestHandler):
 
     def _host_ok(self):
         return self.headers.get("Host", "") in ALLOWED_HOSTS
+
+    def _same_origin(self):
+        origin = self.headers.get("Origin")
+        return origin is None or origin in (f"http://127.0.0.1:{PORT}", f"http://localhost:{PORT}")
 
     def _cors(self):
         origin = self.headers.get("Origin", "")
@@ -488,6 +698,16 @@ class Handler(SimpleHTTPRequestHandler):
                 return self._json(200, load_data())
         if self.path.startswith("/api/config"):
             return self._json(200, load_config())
+        if self.path.startswith("/api/keys"):
+            # Keystrokes only ever go to the agent's own page.
+            if self.headers.get("X-Home") != "1" or not self._same_origin():
+                return self.send_error(403)
+            try:
+                since = int(parse_qs(urlparse(self.path).query).get("since", ["0"])[0])
+            except ValueError:
+                since = 0
+            events, active = keys.poll(since)
+            return self._json(200, {"events": events, "active": active})
         if self.path.startswith("/api/suggest"):
             q = parse_qs(urlparse(self.path).query).get("q", [""])[0].strip()[:200]
             return self._json(200, google_suggest(q) if q else [])
@@ -516,6 +736,14 @@ class Handler(SimpleHTTPRequestHandler):
         if self.path.startswith("/api/media/"):
             ok = media_action(self.path.rsplit("/", 1)[-1])
             return self._json(200, {"ok": ok})
+        if self.path.startswith("/api/keys/"):
+            if not self._same_origin():
+                return self.send_error(403)
+            if self.path.startswith("/api/keys/start"):
+                ok, seq = keys.start()
+                return self._json(200, {"ok": ok, "seq": seq})
+            keys.stop()
+            return self._json(200, {"ok": True})
         self.send_error(404)
 
     def end_headers(self):
