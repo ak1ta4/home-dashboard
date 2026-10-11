@@ -257,7 +257,10 @@ li.done .task-text { color: var(--disabled); text-decoration: line-through; text
 .task-edit { flex: 1; min-width: 0; font-size: 14px; color: var(--display); outline: none; padding: 7px 0; caret-color: var(--orange); }
 
 /* ---------- Bookmarks ---------- */
-.bm { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; padding: 6px 0; color: var(--primary); text-decoration: none; }
+.bm { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; padding: 6px 0; color: var(--primary); text-decoration: none; cursor: pointer; }
+.fs-btn { width: 30px; height: 30px; }
+.fs-btn svg { width: 13px; height: 13px; }
+.fs-btn svg[hidden] { display: none; }
 .bm:hover .bm-name { color: var(--display); }
 .bm:hover .mono { background: var(--primary); color: var(--bg); }
 .mono {

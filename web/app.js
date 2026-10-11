@@ -33,12 +33,30 @@
     if (typing) return;
     if (e.key === '/') { e.preventDefault(); q.focus(); }
     else if (e.key === 't' || e.key === 'T') { e.preventDefault(); $('todo-input').focus(); }
+    else if (e.key === 'f' || e.key === 'F') { e.preventDefault(); toggleFullscreen(); }
     else if (/^[1-9]$/.test(e.key)) {
       const b = data.bookmarks[+e.key - 1];
       if (b) location.href = b.url;
     }
   });
   q.focus();
+
+  // ---------- Fullscreen ----------
+  // Element fullscreen (Fullscreen API), unlike F11, never reveals the browser's
+  // toolbar / URL bar when the pointer reaches the screen edge.
+  const toggleFullscreen = () => {
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+    else document.documentElement.requestFullscreen({ navigationUI: 'hide' }).catch(() => {});
+  };
+  const renderFullscreen = () => {
+    const on = !!document.fullscreenElement;
+    $('ico-fs-on').hidden = on;
+    $('ico-fs-off').hidden = !on;
+    $('fs').setAttribute('aria-pressed', on);
+    $('fs').setAttribute('aria-label', on ? 'Salir de pantalla completa' : 'Pantalla completa');
+  };
+  $('fs').addEventListener('click', toggleFullscreen);
+  document.addEventListener('fullscreenchange', renderFullscreen);
 
   // ---------- Clock ----------
   const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -329,7 +347,6 @@
       chk.setAttribute('aria-label', t.text);
       chk.dataset.act = 'toggle';
       const txt = el('span', 'task-text', t.text);
-      txt.title = 'Doble clic para editar';
       li.append(chk, txt, delBtn('x', 'Borrar tarea'));
       list.append(li);
     }
@@ -408,9 +425,11 @@
       if (!/^https?:\/\//i.test(b.url)) return;
       const li = el('li');
       li.dataset.id = b.id;
-      const a = el('a', 'bm');
-      a.href = b.url;
-      a.rel = 'noopener noreferrer';
+      // Not an <a href>: links make the browser pop its URL status bar on hover.
+      const a = el('div', 'bm');
+      a.setAttribute('role', 'link');
+      a.tabIndex = 0;
+      a.dataset.url = b.url;
       const name = b.name || hostOf(b.url);
       const txt = el('span', 'bm-text');
       txt.append(el('span', 'bm-name', name), el('span', 'bm-host', hostOf(b.url)));
@@ -440,7 +459,22 @@
     save(); renderMarks();
     toggleBmForm(false);
   });
+  const openMark = (url, newTab) => {
+    if (!/^https?:\/\//i.test(url)) return;
+    if (newTab) window.open(url, '_blank', 'noopener');
+    else location.href = url;
+  };
+  $('bm-list').addEventListener('auxclick', e => {
+    const m = e.target.closest('.bm');
+    if (m && e.button === 1) { e.preventDefault(); openMark(m.dataset.url, true); }
+  });
+  $('bm-list').addEventListener('keydown', e => {
+    const m = e.target.closest('.bm');
+    if (m && e.key === 'Enter') openMark(m.dataset.url, e.ctrlKey || e.metaKey);
+  });
   $('bm-list').addEventListener('click', e => {
+    const m = e.target.closest('.bm');
+    if (m) { openMark(m.dataset.url, e.ctrlKey || e.metaKey || e.shiftKey); return; }
     const b = e.target.closest('[data-act="del"]');
     if (!b) return;
     const id = b.closest('li').dataset.id;

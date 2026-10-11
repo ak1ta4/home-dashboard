@@ -16,7 +16,11 @@
   <form class="card a-search" id="search" action="https://www.google.com/search" method="get" role="search">
     <span class="label">Search</span>
     <input id="q" name="q" type="search" autocomplete="off" spellcheck="false" placeholder="Google_" aria-label="Buscar en Google" autofocus>
-    <span class="meta hint"><kbd>/</kbd> search · <kbd>T</kbd> task · <kbd>1</kbd>–<kbd>9</kbd> bookmarks</span>
+    <span class="meta hint"><kbd>/</kbd> search · <kbd>T</kbd> task · <kbd>1</kbd>–<kbd>9</kbd> bookmarks · <kbd>F</kbd> full</span>
+    <button type="button" class="icon-btn fs-btn" id="fs" aria-label="Pantalla completa" aria-pressed="false">
+      <svg viewBox="0 0 16 16" aria-hidden="true" id="ico-fs-on"><path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4"/></svg>
+      <svg viewBox="0 0 16 16" aria-hidden="true" id="ico-fs-off" hidden><path d="M6 2v4H2M14 6h-4V2M10 14v-4h4M2 10h4v4"/></svg>
+    </button>
   </form>
 
   <section class="card a-time">
