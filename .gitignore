@@ -1,0 +1,14 @@
+# Personal data (bookmarks + tasks) written by the agent
+data.json
+data.json.tmp
+
+# Local tooling
+.claude/
+__pycache__/
+*.pyc
+.venv/
+
+# Packed extension builds
+*.xpi
+*.zip
+web-ext-artifacts/

@@ -1,0 +1,9 @@
+{
+  "manifest_version": 3,
+  "name": "Home / System 01",
+  "description": "New tab dashboard (Nothing style) with live PC stats from the local agent.",
+  "version": "1.0.0",
+  "chrome_url_overrides": { "newtab": "index.html" },
+  "content_security_policy": { "extension_pages": "script-src 'self'; object-src 'self'" },
+  "browser_specific_settings": { "gecko": { "id": "home-system01@local", "strict_min_version": "109.0" } }
+}

@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>Home</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Doto:wght,ROND@400..800,0..100&family=Space+Grotesk:wght@400;500&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main class="grid">
+
+  <form class="card a-search" id="search" action="https://www.google.com/search" method="get" role="search">
+    <span class="label">Search</span>
+    <input id="q" name="q" type="search" autocomplete="off" spellcheck="false" placeholder="Google_" aria-label="Buscar en Google" autofocus>
+    <span class="meta hint"><kbd>/</kbd> search · <kbd>T</kbd> task · <kbd>1</kbd>–<kbd>9</kbd> bookmarks</span>
+  </form>
+
+  <section class="card a-time">
+    <div class="label">Local time</div>
+    <div class="clock">
+      <span class="rec" id="rec"></span>
+      <span><span id="hh">--</span><span class="colon" aria-hidden="true"><i></i><i></i></span><span id="mm">--</span></span>
+    </div>
+    <div class="day" id="day">—</div>
+    <div class="date-row"><span class="meta" id="date">—</span><span class="meta" id="week">—</span></div>
+  </section>
+
+  <section class="card a-cpu">
+    <div class="label">CPU load</div>
+    <div class="ring">
+      <svg viewBox="0 0 100 100" aria-hidden="true">
+        <circle class="trk" cx="50" cy="50" r="44" fill="none" stroke-width="6"/>
+        <circle class="val" id="cpu-arc" cx="50" cy="50" r="44" fill="none" stroke-width="6" stroke-dasharray="276.46" stroke-dashoffset="276.46"/>
+      </svg>
+      <div class="num"><div><span id="cpu">--</span><small>%</small></div></div>
+    </div>
+    <div class="meta center" id="cpu-name">—</div>
+  </section>
+
+  <section class="card a-mem">
+    <div class="label">Memory</div>
+    <div class="stat">
+      <span class="big" id="mem">--</span><span class="unit">GB</span>
+      <span class="meta" id="mem-total">/ — GB used</span>
+    </div>
+    <div class="segs" id="mem-segs" data-n="24"></div>
+  </section>
+
+  <section class="card a-np">
+    <div class="np-head">
+      <div class="label" id="np-label">Now playing</div>
+      <div class="ctrls">
+        <button class="ctl" data-media="prev" aria-label="Anterior"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 3v10M13 3 6 8l7 5z"/></svg></button>
+        <button class="ctl" data-media="toggle" aria-label="Reproducir o pausar" id="ctl-toggle"><svg viewBox="0 0 16 16" aria-hidden="true" id="ico-play"><path d="M5 3l8 5-8 5z"/></svg><svg viewBox="0 0 16 16" aria-hidden="true" id="ico-pause" hidden><path d="M5 3v10M11 3v10"/></svg></button>
+        <button class="ctl" data-media="next" aria-label="Siguiente"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M12 3v10M3 3l7 5-7 5z"/></svg></button>
+      </div>
+    </div>
+    <div class="np-body">
+      <div class="np-text">
+        <div class="track-title" id="np-title">Nothing playing</div>
+        <div class="meta" id="np-artist">—</div>
+      </div>
+      <div class="wave" id="wave" aria-hidden="true"></div>
+    </div>
+    <div class="progress">
+      <span class="meta" id="np-pos">--:--</span>
+      <div class="bar"><b id="np-bar"></b></div>
+      <span class="meta" id="np-dur">--:--</span>
+    </div>
+  </section>
+
+  <section class="card a-wx">
+    <div class="label-row"><span class="label">Weather</span><span class="label dim">Madrid</span></div>
+    <div class="dotnum" id="wx-temp">--°</div>
+    <div class="city">Madrid</div>
+    <div class="meta" id="wx-desc">[Loading...]</div>
+  </section>
+
+  <section class="card a-net">
+    <div class="label-row"><span class="label">Network</span><span class="label dim" id="net-iface">—</span></div>
+    <div class="netval"><span class="big" id="net">--</span><span class="unit" id="net-unit">KB/S</span></div>
+    <svg class="spark" viewBox="0 0 100 40" preserveAspectRatio="none" aria-hidden="true"><polyline id="spark" vector-effect="non-scaling-stroke" points=""/></svg>
+    <div class="meta" id="net-up">↑ —</div>
+  </section>
+
+  <section class="card a-sys">
+    <div class="label">System</div>
+    <div class="rows">
+      <div class="row"><span class="name">Host</span><span class="val" id="sys-host">—</span></div>
+      <div class="row"><span class="name">Uptime</span><span class="val" id="sys-up">—</span></div>
+      <div class="row"><span class="name">Local IP</span><span class="val" id="sys-ip">—</span></div>
+      <div class="row"><span class="name">Processes</span><span class="val" id="sys-procs">—</span></div>
+    </div>
+  </section>
+
+  <section class="card a-sto">
+    <div class="label" id="sto-label">Storage</div>
+    <div class="sto-rows" id="sto-rows"></div>
+  </section>
+
+  <section class="card a-st">
+    <div class="label">Status</div>
+    <div class="tags">
+      <span class="tag" id="tag-net">Online</span>
+      <span class="tag" id="tag-agent">Agent</span>
+      <span class="tag" id="tag-os">Windows</span>
+      <span class="tag" id="tag-link">—</span>
+    </div>
+  </section>
+
+  <section class="card a-gpu">
+    <div class="label" id="gpu-label">GPU</div>
+    <div class="dotnum"><span id="gpu">--</span><span class="unit">%</span></div>
+    <div class="segs" id="gpu-segs" data-n="24"></div>
+    <div class="meta gpu-meta"><span id="gpu-eng"></span><span id="gpu-temp">--°C</span> · <span id="gpu-vram">— GB VRAM</span></div>
+  </section>
+
+  <section class="card a-todo">
+    <div class="label-row">
+      <span class="label">Tasks</span>
+      <span class="head-actions">
+        <button class="txt-btn" id="todo-clear" hidden>Clear done</button>
+        <span class="label dim" id="todo-count">0/0</span>
+      </span>
+    </div>
+    <div class="segs" id="todo-segs" data-n="24"></div>
+    <form class="add-row" id="todo-form" autocomplete="off">
+      <input id="todo-input" maxlength="500" placeholder="Add task_" aria-label="Nueva tarea">
+      <button class="icon-btn" aria-label="Añadir tarea"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3v10M3 8h10"/></svg></button>
+    </form>
+    <ul class="list" id="todo-list"></ul>
+    <div class="empty meta" id="todo-empty">[No tasks]</div>
+  </section>
+
+  <section class="card a-marks">
+    <div class="label-row">
+      <span class="label">Bookmarks</span>
+      <span class="head-actions">
+        <span class="label dim" id="bm-count">0</span>
+        <button class="icon-btn" id="bm-add" aria-label="Añadir marcador" aria-expanded="false"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3v10M3 8h10"/></svg></button>
+      </span>
+    </div>
+    <form class="bm-form" id="bm-form" autocomplete="off" hidden>
+      <input id="bm-url" placeholder="URL_" aria-label="URL del marcador" required>
+      <input id="bm-name" maxlength="80" placeholder="Name (optional)" aria-label="Nombre del marcador">
+      <div class="bm-form-row">
+        <span class="meta" id="bm-msg"></span>
+        <button type="button" class="txt-btn" id="bm-cancel">Cancel</button>
+        <button class="txt-btn strong">Save</button>
+      </div>
+    </form>
+    <ul class="list" id="bm-list"></ul>
+    <div class="empty meta" id="bm-empty">[No bookmarks]</div>
+  </section>
+
+</main>
+<script src="app.js"></script>
+</body>
+</html>
