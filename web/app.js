@@ -185,8 +185,8 @@
     if (e.key === '/') { e.preventDefault(); q.focus(); }
     else if (e.key === 't' || e.key === 'T') { e.preventDefault(); $('todo-input').focus(); }
     else if (e.key === 'f' || e.key === 'F') { e.preventDefault(); toggleFullscreen(); }
-    else if (/^[1-9]$/.test(e.key)) {
-      const b = data.bookmarks[+e.key - 1];
+    else if (/^[0-9]$/.test(e.key)) {
+      const b = data.bookmarks[e.key === '0' ? 9 : +e.key - 1]; // 1–9, 0 = 10th
       if (b) location.href = b.url;
     }
   });
@@ -597,7 +597,7 @@
       a.append(el('span', 'mono', name.trim().charAt(0) || '•'), txt);
       const grip = el('span', 'grip');
       grip.setAttribute('aria-hidden', 'true');
-      li.append(a, el('span', 'key', i < 9 ? String(i + 1) : ''), grip, delBtn('x bm-x', `Borrar ${name}`));
+      li.append(a, el('span', 'key', String(i + 1)), grip, delBtn('x bm-x', `Borrar ${name}`));
       list.append(li);
     });
     setText('bm-count', data.bookmarks.length);

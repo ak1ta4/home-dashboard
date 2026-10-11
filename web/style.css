@@ -301,7 +301,7 @@ li.done .task-text { color: var(--disabled); text-decoration: line-through; text
 .bm-text { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .bm-name { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .bm-host { font-family: var(--font-mono); font-size: 9.5px; letter-spacing: .06em; color: var(--disabled); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.key { font-family: var(--font-mono); font-size: 10px; color: var(--disabled); width: 14px; text-align: right; flex: none; }
+.key { font-family: var(--font-mono); font-size: 10px; color: var(--disabled); min-width: 14px; text-align: right; flex: none; font-variant-numeric: tabular-nums; }
 .list li:hover .key, .list li:focus-within .key { display: none; }
 .list li:not(:hover):not(:focus-within) .bm-x { width: 0; overflow: hidden; }
 @media (hover: none) { .key { display: none; } .list li .bm-x { width: 22px !important; } }
