@@ -651,6 +651,23 @@
   // ---------- Loops ----------
   loadData();
   q.focus(); // after everything above exists (focus may trigger autocomplete)
+
+  // Switching tabs / windows: leaving releases the search box (no caret left
+  // blinking, no highlighted card); coming back puts the caret straight in it —
+  // unless you were in another field (task, bookmark form), which keeps focus.
+  let restoreSearch = true;
+  const leave = () => {
+    if (document.activeElement === q) { restoreSearch = true; q.blur(); }
+    else restoreSearch = !document.activeElement || document.activeElement === document.body;
+  };
+  const enter = () => {
+    if (document.visibilityState !== 'visible' || !restoreSearch) return;
+    const a = document.activeElement;
+    if (!a || a === document.body) q.focus({ preventScroll: true });
+  };
+  addEventListener('blur', leave);
+  addEventListener('focus', enter);
+  document.addEventListener('visibilitychange', () => (document.visibilityState === 'visible' ? enter() : leave()));
   clock(); loadConfig().then(weather); poll(); renderSpark(); renderMedia(); renderWave(false);
   setInterval(clock, 1000);
   setInterval(poll, 1000);
