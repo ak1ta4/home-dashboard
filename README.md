@@ -19,7 +19,7 @@ Página de inicio / nueva pestaña para Windows, a pantalla completa y en modo o
 
 Atajos (fuera de un campo de texto): `/` buscar · `T` nueva tarea · `1`–`9`, `0` abrir marcador · `F` pantalla completa · `Esc` salir del campo.
 
-En el buscador: `↑` `↓` recorrer sugerencias · `Enter` abrir · `Ctrl+Enter` en otra pestaña · `Tab` aceptar el autocompletado · `Shift+Supr` borrar una búsqueda reciente · `Esc` cerrar.
+En el buscador: si lo que escribes coincide con el principio del nombre o dominio de un marcador (p. ej. `ani` → anilist), se autocompleta y `Enter` lo abre; `Esc` y luego `Enter` busca en Google. `↑` `↓` recorrer sugerencias · `Enter` abrir · `Ctrl+Enter` en otra pestaña · `Tab` aceptar el autocompletado · `Shift+Supr` borrar una búsqueda reciente · `Esc` cerrar.
 
 El botón de pantalla completa usa la Fullscreen API: a diferencia de F11, el navegador no muestra la barra de direcciones al acercar el ratón arriba.
 

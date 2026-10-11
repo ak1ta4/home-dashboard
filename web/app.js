@@ -49,16 +49,35 @@
   };
   const KIND = { google: 'Google', recent: 'Recent', bookmark: 'Bookmark', url: 'Go to' };
 
+  // Bookmarks rank first. A prefix match on the name or domain carries `fill`,
+  // the text used for inline autofill ("ani" → "anilist").
+  const bookmarkMatches = lv => {
+    const out = [];
+    for (const b of data.bookmarks) {
+      const shown = b.name || hostOf(b.url), name = shown.toLowerCase(), host = hostOf(b.url);
+      let score = -1, fill = null;
+      if (name.startsWith(lv)) { score = 0; fill = shown; }
+      else if (host.startsWith(lv)) { score = 1; fill = host; }
+      else if (name.split(/\s+/).some(w => w.startsWith(lv))) score = 2;
+      else if (host.includes('.' + lv)) score = 3;
+      if (score >= 0) out.push({ kind: 'bookmark', text: shown, sub: host, url: b.url, fill, score });
+    }
+    return out.sort((a, b) => a.score - b.score).slice(0, 3);
+  };
   const localMatches = v => {
-    const lv = v.toLowerCase(), out = [];
+    const lv = v.toLowerCase();
+    const out = bookmarkMatches(lv);
     if (isUrlish(v)) out.push({ kind: 'url', text: v, url: toUrl(v) });
-    data.bookmarks.filter(b => {
-      const name = (b.name || '').toLowerCase(), host = hostOf(b.url);
-      return name.split(/\s+/).some(w => w.startsWith(lv)) || host.startsWith(lv) || host.includes('.' + lv);
-    }).slice(0, 3).forEach(b => out.push({ kind: 'bookmark', text: b.name || hostOf(b.url), sub: hostOf(b.url), url: b.url }));
     readRecent().filter(r => r.toLowerCase().startsWith(lv) && r.toLowerCase() !== lv)
       .slice(0, 2).forEach(r => out.push({ kind: 'recent', text: r }));
     return out;
+  };
+  // The bookmark Enter opens when nothing is selected with the arrows.
+  const autofill = () => {
+    const it = items[0];
+    if (sel !== -1 || !it || it.kind !== 'bookmark' || !it.fill) return null;
+    if (typed !== typed.trimStart() || typed.trim().length < 2) return null;
+    return it.fill.toLowerCase().startsWith(typed.toLowerCase()) ? it : null;
   };
   const merge = (v, remote) => {
     const local = localMatches(v);
@@ -69,6 +88,8 @@
 
   const ghostRest = () => {
     if (sel !== -1 || !typed.trim() || q.selectionStart !== q.value.length) return '';
+    const af = autofill();
+    if (af) return af.fill.slice(typed.length);
     const lt = typed.toLowerCase();
     const it = items.find(i => (i.kind === 'google' || i.kind === 'recent')
       && i.text.toLowerCase().startsWith(lt) && i.text.length > typed.length);
@@ -80,7 +101,11 @@
     $('ghost-rest').textContent = rest;
   };
   const mark = () => {
-    [...sugg.children].forEach((li, i) => li.setAttribute('aria-selected', i === sel));
+    const af = autofill();
+    [...sugg.children].forEach((li, i) => {
+      li.setAttribute('aria-selected', i === sel);
+      li.classList.toggle('is-default', !!af && i === 0);
+    });
     if (sel >= 0) q.setAttribute('aria-activedescendant', 'sugg-' + sel);
     else q.removeAttribute('aria-activedescendant');
   };
@@ -159,9 +184,9 @@
       sel = e.key === 'ArrowDown' ? (sel + 1 >= n ? -1 : sel + 1) : (sel - 1 < -1 ? n - 1 : sel - 1);
       q.value = sel === -1 || items[sel].kind === 'bookmark' ? typed : items[sel].text;
       mark(); renderGhost();
-    } else if (e.key === 'Enter' && sel >= 0) {
+    } else if (e.key === 'Enter' && (sel >= 0 || autofill())) {
       e.preventDefault();
-      choose(items[sel], e.ctrlKey || e.shiftKey);
+      choose(sel >= 0 ? items[sel] : autofill(), e.ctrlKey || e.shiftKey);
     } else if (e.key === 'Tab' || (e.key === 'ArrowRight' && q.selectionStart === q.value.length)) {
       const rest = ghostRest();
       if (rest) { e.preventDefault(); q.value += rest; update(); }

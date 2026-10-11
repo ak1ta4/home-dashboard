@@ -105,8 +105,9 @@ button { cursor: pointer; }
   display: flex; align-items: center; gap: 14px; padding: 9px 12px; border-radius: 8px;
   cursor: pointer; font-size: 16px; color: var(--display); min-width: 0;
 }
-.sugg li[aria-selected="true"] { background: #1A1A1A; }
+.sugg li[aria-selected="true"], .sugg li.is-default { background: #1A1A1A; }
 .sugg li[aria-selected="true"] .s-ico { color: var(--orange); }
+.sugg li.is-default .s-kind::before { content: "↵ "; color: var(--orange); }
 .s-ico { width: 22px; height: 22px; flex: none; display: grid; place-items: center; color: var(--disabled); }
 .s-ico svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.5; }
 .s-ico.mono { width: 22px; height: 22px; font-size: 11px; }
