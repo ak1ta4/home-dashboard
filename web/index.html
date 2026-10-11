@@ -15,12 +15,17 @@
 
   <form class="card a-search" id="search" action="https://www.google.com/search" method="get" role="search">
     <span class="label">Search</span>
-    <input id="q" name="q" type="search" autocomplete="off" spellcheck="false" placeholder="Google_" aria-label="Buscar en Google" autofocus>
+    <div class="q-wrap">
+      <span class="ghost" aria-hidden="true"><span class="ghost-typed" id="ghost-typed"></span><span id="ghost-rest"></span></span>
+      <input id="q" name="q" type="search" autocomplete="off" spellcheck="false" placeholder="Google_" aria-label="Buscar en Google"
+        role="combobox" aria-autocomplete="both" aria-expanded="false" aria-controls="sugg" autofocus>
+    </div>
     <span class="meta hint"><kbd>/</kbd> search · <kbd>T</kbd> task · <kbd>1</kbd>–<kbd>9</kbd> bookmarks · <kbd>F</kbd> full</span>
     <button type="button" class="icon-btn fs-btn" id="fs" aria-label="Pantalla completa" aria-pressed="false">
       <svg viewBox="0 0 16 16" aria-hidden="true" id="ico-fs-on"><path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4"/></svg>
       <svg viewBox="0 0 16 16" aria-hidden="true" id="ico-fs-off" hidden><path d="M6 2v4H2M14 6h-4V2M10 14v-4h4M2 10h4v4"/></svg>
     </button>
+    <ul class="sugg" id="sugg" role="listbox" aria-label="Sugerencias" hidden></ul>
   </form>
 
   <section class="card a-time">
@@ -78,9 +83,9 @@
   </section>
 
   <section class="card a-wx">
-    <div class="label-row"><span class="label">Weather</span><span class="label dim">Madrid</span></div>
+    <div class="label-row"><span class="label">Weather</span><span class="label dim" id="wx-region">Spain</span></div>
     <div class="dotnum" id="wx-temp">--°</div>
-    <div class="city">Madrid</div>
+    <div class="city" id="wx-city">Madrid</div>
     <div class="meta" id="wx-desc">[Loading...]</div>
   </section>
 

@@ -1,6 +1,7 @@
-# Personal data (bookmarks + tasks) written by the agent
+# Personal data (bookmarks + tasks) written by the agent, and local settings
 data.json
 data.json.tmp
+config.json
 
 # Local tooling
 .claude/

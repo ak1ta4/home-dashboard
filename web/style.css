@@ -84,6 +84,36 @@ button { cursor: pointer; }
 .a-search input::placeholder { color: var(--disabled); font-family: var(--font-mono); font-size: 14px; letter-spacing: .08em; text-transform: uppercase; }
 .a-search input::-webkit-search-cancel-button { display: none; }
 .a-search .label { flex: none; }
+.a-search { position: relative; overflow: visible; z-index: 20; }
+
+/* Inline completion: ghost text sits under a transparent input */
+.q-wrap { flex: 1; min-width: 0; height: 100%; position: relative; display: flex; align-items: center; }
+.q-wrap input { width: 100%; position: relative; z-index: 1; background: transparent; }
+.ghost {
+  position: absolute; left: 0; top: 50%; transform: translateY(-50%); pointer-events: none;
+  font-size: 20px; white-space: pre; overflow: hidden; max-width: 100%; color: var(--disabled);
+}
+.ghost-typed { visibility: hidden; }
+
+/* Suggestions dropdown */
+.sugg {
+  position: absolute; top: calc(100% + 6px); left: -1px; right: -1px; list-style: none;
+  background: var(--surface); border: 1px solid var(--border-hi); border-radius: var(--radius); padding: 6px;
+}
+.sugg[hidden] { display: none; }
+.sugg li {
+  display: flex; align-items: center; gap: 14px; padding: 9px 12px; border-radius: 8px;
+  cursor: pointer; font-size: 16px; color: var(--display); min-width: 0;
+}
+.sugg li[aria-selected="true"] { background: #1A1A1A; }
+.sugg li[aria-selected="true"] .s-ico { color: var(--orange); }
+.s-ico { width: 22px; height: 22px; flex: none; display: grid; place-items: center; color: var(--disabled); }
+.s-ico svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.5; }
+.s-ico.mono { width: 22px; height: 22px; font-size: 11px; }
+.s-text { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.s-text .typed { color: var(--secondary); }
+.s-sub { font-family: var(--font-mono); font-size: 10px; letter-spacing: .06em; color: var(--disabled); margin-left: 10px; }
+.s-kind { font-family: var(--font-mono); font-size: 9.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--disabled); flex: none; }
 kbd { font-family: var(--font-mono); border: 1px solid var(--border-hi); border-radius: 4px; padding: 1px 5px; color: var(--secondary); }
 
 /* ---------- Time (hero) ---------- */

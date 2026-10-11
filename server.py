@@ -19,6 +19,8 @@ import winreg
 from ctypes import wintypes
 from datetime import datetime, timezone
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import parse_qs, urlencode, urlparse
+from urllib.request import Request, urlopen
 
 import psutil
 
@@ -29,7 +31,41 @@ EXT_SCHEMES = ("moz-extension://", "chrome-extension://")
 NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 
 DATA_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data.json")
+CONFIG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json")
 MAX_BODY = 512 * 1024
+
+
+def load_config():
+    """Local, git-ignored settings (see config.example.json). Only the weather block is exposed."""
+    try:
+        with open(CONFIG_FILE, encoding="utf-8") as f:
+            w = json.load(f).get("weather") or {}
+        return {"weather": {
+            "city": str(w["city"])[:60], "region": str(w.get("region", ""))[:60],
+            "lat": float(w["lat"]), "lon": float(w["lon"]),
+        }}
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        return {}
+
+
+_suggest_cache = {}
+
+
+def google_suggest(q):
+    """Google's public autocomplete endpoint. The page can't call it directly (no CORS)."""
+    if q in _suggest_cache:
+        return _suggest_cache[q]
+    url = "https://suggestqueries.google.com/complete/search?" + urlencode(
+        {"client": "firefox", "hl": "es", "ie": "utf-8", "oe": "utf-8", "q": q})
+    try:
+        with urlopen(Request(url, headers={"User-Agent": "Mozilla/5.0"}), timeout=2) as r:
+            out = [s for s in json.loads(r.read().decode("utf-8", "replace"))[1] if isinstance(s, str)][:8]
+    except Exception:
+        return []
+    if len(_suggest_cache) > 300:
+        _suggest_cache.clear()
+    _suggest_cache[q] = out
+    return out
 
 GB = 1024 ** 3
 state = {}
@@ -437,6 +473,11 @@ class Handler(SimpleHTTPRequestHandler):
         if self.path.startswith("/api/data"):
             with data_lock:
                 return self._json(200, load_data())
+        if self.path.startswith("/api/config"):
+            return self._json(200, load_config())
+        if self.path.startswith("/api/suggest"):
+            q = parse_qs(urlparse(self.path).query).get("q", [""])[0].strip()[:200]
+            return self._json(200, google_suggest(q) if q else [])
         return super().do_GET()
 
     def do_PUT(self):

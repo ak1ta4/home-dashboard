@@ -1,7 +1,8 @@
 (() => {
   // Served by the local agent → same origin. Loaded as a browser extension → talk to the agent directly.
   const API = location.protocol.startsWith('http') ? '' : 'http://127.0.0.1:47800';
-  const WX = { lat: 40.4168, lon: -3.7038 }; // Madrid
+  // Default location; override locally in config.json (served by the agent, git-ignored).
+  let WX = { city: 'Madrid', region: 'Spain', lat: 40.4168, lon: -3.7038 };
 
   const $ = id => document.getElementById(id);
   const pad = n => String(n).padStart(2, '0');
@@ -16,13 +17,163 @@
 
   // ---------- Search ----------
   const form = $('search'), q = $('q');
+  const URL_RE = /^(https?:\/\/)?[\w-]+(\.[\w-]+)+(:\d+)?(\/\S*)?$/i;
+  const isUrlish = v => !/\s/.test(v) && URL_RE.test(v);
+  const toUrl = v => /^https?:\/\//i.test(v) ? v : 'https://' + v;
+  const googleUrl = v => 'https://www.google.com/search?q=' + encodeURIComponent(v);
+
+  // Recent searches stay in this browser only (localStorage).
+  const RECENT_KEY = 'home-recent';
+  const readRecent = () => { try { return JSON.parse(localStorage.getItem(RECENT_KEY)) || []; } catch { return []; } };
+  const writeRecent = r => { try { localStorage.setItem(RECENT_KEY, JSON.stringify(r.slice(0, 50))); } catch {} };
+  const remember = v => writeRecent([v, ...readRecent().filter(x => x.toLowerCase() !== v.toLowerCase())]);
+  const forget = v => writeRecent(readRecent().filter(x => x !== v));
+
   form.addEventListener('submit', e => {
     const v = q.value.trim();
+    closeSugg();
     if (!v) { e.preventDefault(); return; }
     // Looks like a URL → go there directly instead of searching.
-    if (!/\s/.test(v) && /^([a-z]+:\/\/)?[\w-]+(\.[\w-]+)+(:\d+)?(\/\S*)?$/i.test(v)) {
+    if (isUrlish(v)) { e.preventDefault(); location.href = toUrl(v); return; }
+    remember(v);
+  });
+
+  // ---------- Autocomplete ----------
+  const sugg = $('sugg');
+  const remoteCache = new Map();
+  let items = [], sel = -1, typed = '', reqId = 0, timer = 0;
+  const ICONS = {
+    google: '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 14 14"/></svg>',
+    recent: '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M8 4.5V8l2.5 1.5"/></svg>',
+    url: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4"/></svg>',
+  };
+  const KIND = { google: 'Google', recent: 'Recent', bookmark: 'Bookmark', url: 'Go to' };
+
+  const localMatches = v => {
+    const lv = v.toLowerCase(), out = [];
+    if (isUrlish(v)) out.push({ kind: 'url', text: v, url: toUrl(v) });
+    data.bookmarks.filter(b => {
+      const name = (b.name || '').toLowerCase(), host = hostOf(b.url);
+      return name.split(/\s+/).some(w => w.startsWith(lv)) || host.startsWith(lv) || host.includes('.' + lv);
+    }).slice(0, 3).forEach(b => out.push({ kind: 'bookmark', text: b.name || hostOf(b.url), sub: hostOf(b.url), url: b.url }));
+    readRecent().filter(r => r.toLowerCase().startsWith(lv) && r.toLowerCase() !== lv)
+      .slice(0, 2).forEach(r => out.push({ kind: 'recent', text: r }));
+    return out;
+  };
+  const merge = (v, remote) => {
+    const local = localMatches(v);
+    const seen = new Set([v.toLowerCase(), ...local.map(i => i.text.toLowerCase())]);
+    const g = remote.filter(s => !seen.has(s.toLowerCase())).map(text => ({ kind: 'google', text }));
+    return [...local, ...g].slice(0, 8);
+  };
+
+  const ghostRest = () => {
+    if (sel !== -1 || !typed.trim() || q.selectionStart !== q.value.length) return '';
+    const lt = typed.toLowerCase();
+    const it = items.find(i => (i.kind === 'google' || i.kind === 'recent')
+      && i.text.toLowerCase().startsWith(lt) && i.text.length > typed.length);
+    return it ? it.text.slice(typed.length) : '';
+  };
+  const renderGhost = () => {
+    const rest = q.scrollWidth > q.clientWidth ? '' : ghostRest();
+    $('ghost-typed').textContent = rest ? q.value : '';
+    $('ghost-rest').textContent = rest;
+  };
+  const mark = () => {
+    [...sugg.children].forEach((li, i) => li.setAttribute('aria-selected', i === sel));
+    if (sel >= 0) q.setAttribute('aria-activedescendant', 'sugg-' + sel);
+    else q.removeAttribute('aria-activedescendant');
+  };
+  const renderSugg = () => {
+    sugg.textContent = '';
+    const lv = typed.toLowerCase();
+    items.forEach((it, i) => {
+      const li = el('li');
+      li.id = 'sugg-' + i;
+      li.setAttribute('role', 'option');
+      const ico = el('span', it.kind === 'bookmark' ? 's-ico mono' : 's-ico');
+      if (it.kind === 'bookmark') ico.textContent = it.text.charAt(0);
+      else ico.innerHTML = ICONS[it.kind];
+      const txt = el('span', 's-text');
+      if (it.kind !== 'bookmark' && lv && it.text.toLowerCase().startsWith(lv)) {
+        txt.append(el('span', 'typed', it.text.slice(0, typed.length)), it.text.slice(typed.length));
+      } else txt.textContent = it.text;
+      if (it.sub) txt.append(el('span', 's-sub', it.sub));
+      li.append(ico, txt, el('span', 's-kind', KIND[it.kind]));
+      li.addEventListener('mousedown', e => { e.preventDefault(); choose(it, e.ctrlKey || e.shiftKey || e.button === 1); });
+      li.addEventListener('mousemove', () => { if (sel !== i) { sel = i; mark(); renderGhost(); } });
+      sugg.append(li);
+    });
+    sugg.hidden = !items.length;
+    q.setAttribute('aria-expanded', items.length > 0);
+    mark(); renderGhost();
+  };
+  function closeSugg() {
+    clearTimeout(timer); reqId++;
+    items = []; sel = -1;
+    renderSugg();
+  }
+
+  const fetchRemote = async v => {
+    if (remoteCache.has(v)) return remoteCache.get(v);
+    try {
+      const r = await fetch(`${API}/api/suggest?q=${encodeURIComponent(v)}`, { cache: 'no-store' });
+      const j = r.ok ? await r.json() : [];
+      if (Array.isArray(j)) { remoteCache.set(v, j); return j; }
+    } catch {}
+    return [];
+  };
+  const update = () => {
+    typed = q.value; sel = -1;
+    const v = typed.trim();
+    if (!v) { closeSugg(); return; }
+    items = merge(v, remoteCache.get(v) || []); // local results show instantly
+    renderSugg();
+    clearTimeout(timer);
+    const id = ++reqId;
+    timer = setTimeout(async () => {
+      const remote = await fetchRemote(v);
+      if (id !== reqId) return; // a newer keystroke won
+      items = merge(v, remote);
+      renderSugg();
+    }, 120);
+  };
+  const choose = (it, newTab) => {
+    closeSugg();
+    if (it.url) { if (newTab) window.open(it.url, '_blank', 'noopener'); else location.href = it.url; return; }
+    q.value = it.text;
+    if (newTab) { remember(it.text); window.open(googleUrl(it.text), '_blank', 'noopener'); }
+    else form.requestSubmit();
+  };
+
+  q.addEventListener('input', update);
+  q.addEventListener('focus', () => { if (q.value.trim()) update(); });
+  q.addEventListener('blur', closeSugg);
+  q.addEventListener('keyup', e => { if (e.key.startsWith('Arrow') || e.key === 'Home' || e.key === 'End') renderGhost(); });
+  q.addEventListener('click', renderGhost);
+  q.addEventListener('keydown', e => {
+    const open = items.length > 0;
+    if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && open) {
       e.preventDefault();
-      location.href = /^[a-z]+:\/\//i.test(v) ? v : 'https://' + v;
+      const n = items.length;
+      sel = e.key === 'ArrowDown' ? (sel + 1 >= n ? -1 : sel + 1) : (sel - 1 < -1 ? n - 1 : sel - 1);
+      q.value = sel === -1 || items[sel].kind === 'bookmark' ? typed : items[sel].text;
+      mark(); renderGhost();
+    } else if (e.key === 'Enter' && sel >= 0) {
+      e.preventDefault();
+      choose(items[sel], e.ctrlKey || e.shiftKey);
+    } else if (e.key === 'Tab' || (e.key === 'ArrowRight' && q.selectionStart === q.value.length)) {
+      const rest = ghostRest();
+      if (rest) { e.preventDefault(); q.value += rest; update(); }
+    } else if (e.key === 'Escape' && open) {
+      e.preventDefault(); e.stopPropagation();
+      q.value = typed;
+      closeSugg();
+    } else if (e.key === 'Delete' && e.shiftKey && sel >= 0 && items[sel].kind === 'recent') {
+      e.preventDefault();
+      forget(items[sel].text);
+      items.splice(sel, 1); sel = -1; q.value = typed;
+      renderSugg();
     }
   });
   document.addEventListener('keydown', e => {
@@ -39,7 +190,6 @@
       if (b) location.href = b.url;
     }
   });
-  q.focus();
 
   // ---------- Fullscreen ----------
   // Element fullscreen (Fullscreen API), unlike F11, never reveals the browser's
@@ -87,11 +237,22 @@
     95: 'Thunderstorm', 96: 'Storm · hail', 99: 'Storm · hail',
   };
   let wxOk = false;
+  const loadConfig = async () => {
+    try {
+      const ctl = new AbortController();
+      setTimeout(() => ctl.abort(), 1500);
+      const r = await fetch(`${API}/api/config`, { cache: 'no-store', signal: ctl.signal });
+      const c = r.ok ? await r.json() : {};
+      if (c.weather) WX = c.weather;
+    } catch {}
+    setText('wx-city', WX.city);
+    setText('wx-region', WX.region || '');
+  };
   const weather = async () => {
     try {
       const url = `https://api.open-meteo.com/v1/forecast?latitude=${WX.lat}&longitude=${WX.lon}`
         + '&current=temperature_2m,weather_code&daily=temperature_2m_max,temperature_2m_min'
-        + '&timezone=Europe%2FMadrid&forecast_days=1';
+        + '&timezone=auto&forecast_days=1';
       const r = await fetch(url, { cache: 'no-store' });
       if (!r.ok) throw new Error(r.status);
       const j = await r.json();
@@ -489,7 +650,8 @@
 
   // ---------- Loops ----------
   loadData();
-  clock(); weather(); poll(); renderSpark(); renderMedia(); renderWave(false);
+  q.focus(); // after everything above exists (focus may trigger autocomplete)
+  clock(); loadConfig().then(weather); poll(); renderSpark(); renderMedia(); renderWave(false);
   setInterval(clock, 1000);
   setInterval(poll, 1000);
   setInterval(() => { renderMedia(); }, 250);

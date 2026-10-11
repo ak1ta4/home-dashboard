@@ -6,18 +6,22 @@ Página de inicio / nueva pestaña para Windows, a pantalla completa y en modo o
 
 | Tarjeta | Fuente |
 |---|---|
-| Buscador de Google (o abre directamente una URL) | — |
+| Buscador de Google con autocompletado: sugerencias de Google, tus marcadores y búsquedas recientes; texto fantasma que se acepta con `Tab` / `→` | Google Suggest vía el agente |
 | Reloj dot‑matrix, día, fecha y semana | navegador |
 | CPU (anillo), memoria, discos | `psutil` |
 | GPU: uso igual que el Administrador de tareas, temperatura, VRAM | contadores PDH de Windows + `nvidia-smi` |
 | Red: bajada / subida en vivo con sparkline | `psutil` |
 | Sistema: host, uptime, IP local, procesos | `psutil` |
 | Now playing con anterior / pausa / siguiente | controles multimedia de Windows (SMTC); si Spotify no publica ahí, se lee el título de su ventana y se controla con las teclas multimedia |
-| Clima (por defecto Madrid) | [Open‑Meteo](https://open-meteo.com) (sin API key) |
+| Clima (por defecto Madrid, configurable) | [Open‑Meteo](https://open-meteo.com) (sin API key) |
 | Tareas: añadir, completar, editar con doble clic, limpiar hechas | `data.json` vía el agente |
 | Marcadores con atajos `1`–`9` | `data.json` vía el agente |
 
-Atajos (fuera de un campo de texto): `/` buscar · `T` nueva tarea · `1`–`9` abrir marcador · `Esc` salir del campo.
+Atajos (fuera de un campo de texto): `/` buscar · `T` nueva tarea · `1`–`9` abrir marcador · `F` pantalla completa · `Esc` salir del campo.
+
+En el buscador: `↑` `↓` recorrer sugerencias · `Enter` abrir · `Ctrl+Enter` en otra pestaña · `Tab` aceptar el autocompletado · `Shift+Supr` borrar una búsqueda reciente · `Esc` cerrar.
+
+El botón de pantalla completa usa la Fullscreen API: a diferencia de F11, el navegador no muestra la barra de direcciones al acercar el ratón arriba.
 
 ## Requisitos
 
@@ -53,7 +57,7 @@ Crea el acceso directo `Home Agent` en `shell:startup`, que lanza `pythonw serve
 
 ## Configuración
 
-- **Ubicación del clima**: edita `WX` al principio de `web/app.js` (latitud / longitud) y el nombre de la ciudad en `web/index.html`.
+- **Ubicación del clima**: copia `config.example.json` a `config.json` y pon tu ciudad, región y coordenadas. `config.json` está en `.gitignore`, así que tu ubicación no se sube. Sin ese archivo se usa Madrid.
 - **Puerto**: variable de entorno `HOME_PORT` (por defecto `47800`). Si lo cambias, actualiza también `API` en `web/app.js` para la versión extensión.
 
 ## Seguridad
@@ -61,12 +65,15 @@ Crea el acceso directo `Home Agent` en `shell:startup`, que lanza `pythonw serve
 - El agente solo escucha en `127.0.0.1` y rechaza peticiones con otra cabecera `Host` (protección contra DNS rebinding).
 - Las escrituras (`PUT /api/data`, `POST /api/media/*`) exigen la cabecera `X-Home: 1`, lo que fuerza un preflight CORS que solo se acepta para orígenes `moz-extension://` y `chrome-extension://`. Otras webs no pueden leer tus datos ni controlar tu música.
 - Los marcadores solo aceptan URLs `http(s)`.
-- `data.json` (tus tareas y marcadores) está en `.gitignore`.
+- `data.json` (tus tareas y marcadores) y `config.json` (tu ubicación) están en `.gitignore`. Las búsquedas recientes solo se guardan en el `localStorage` del navegador.
+- Mientras escribes en el buscador, el texto se envía a Google para obtener sugerencias (igual que hace la barra del navegador).
 
 ## Estructura
 
 ```
-server.py              agente local: estáticos + /api/stats, /api/data, /api/media/*
+server.py              agente local: estáticos + /api/stats, /api/data, /api/media/*,
+                       /api/suggest, /api/config
+config.example.json    plantilla de config.json (ubicación del clima)
 install-autostart.ps1  acceso directo en el Inicio de Windows
 requirements.txt
 web/
