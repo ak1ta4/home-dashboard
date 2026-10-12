@@ -13,3 +13,6 @@ __pycache__/
 *.xpi
 *.zip
 web-ext-artifacts/
+
+# Project-local dependencies (pip install --target .deps -r requirements.txt)
+.deps/

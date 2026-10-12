@@ -34,11 +34,13 @@ El botón de pantalla completa usa la Fullscreen API: a diferencia de F11, el na
 ```powershell
 git clone https://github.com/ak1ta4/home-dashboard.git
 cd home-dashboard
-python -m pip install --user -r requirements.txt
+python -m pip install --target .deps -r requirements.txt
 python server.py
 ```
 
 Abre <http://127.0.0.1:47800>.
+
+Las dependencias se instalan en `.deps/` dentro del proyecto (el agente las carga de ahí). Así las encuentra también cuando Windows lo arranca al iniciar sesión: un `pip install --user` hecho desde una app empaquetada (MSIX) puede acabar en una copia privada de `%APPDATA%` que la tarea programada no ve. `install-autostart.ps1` las instala si faltan.
 
 ### Arrancar con Windows
 

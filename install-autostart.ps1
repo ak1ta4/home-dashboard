@@ -40,6 +40,16 @@ if (-not $pythonw) {
     exit 1
 }
 
+# Dependencies go in the project's .deps folder, which every process can see
+# (a `pip install --user` made from a sandboxed app may be invisible at sign-in).
+$deps = Join-Path $here '.deps'
+if (-not (Test-Path (Join-Path $deps 'psutil'))) {
+    $python = Join-Path (Split-Path $pythonw) 'python.exe'
+    Write-Output "Instalando dependencias en $deps ..."
+    & $python -m pip install --quiet --disable-pip-version-check --target $deps -r (Join-Path $here 'requirements.txt')
+    if ($LASTEXITCODE -ne 0) { Write-Error "No se pudieron instalar las dependencias."; exit 1 }
+}
+
 # Older versions used a Startup-folder shortcut; remove it so there's one launcher only.
 $oldLnk = Join-Path ([Environment]::GetFolderPath('Startup')) 'Home Agent.lnk'
 if (Test-Path $oldLnk) { Remove-Item $oldLnk -Force; Write-Output "Acceso directo antiguo eliminado: $oldLnk" }

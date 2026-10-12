@@ -23,11 +23,51 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlencode, urlparse
 from urllib.request import Request, urlopen
 
+def _ensure_user_site():
+    """Make the dependencies importable however Windows starts us.
+
+    1. A project-local `.deps` folder (`pip install --target .deps -r requirements.txt`)
+       wins: it is visible to every process. Packages installed with `pip install --user`
+       from a sandboxed/MSIX app land in that app's private copy of %APPDATA%, which a
+       scheduled task or the Startup folder never sees.
+    2. Otherwise add %APPDATA%\\Python\\PythonXY\\site-packages explicitly, resolving the
+       real Roaming folder even when APPDATA is missing at sign-in."""
+    import site
+    deps = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".deps")
+    if os.path.isdir(deps) and deps not in sys.path:
+        site.addsitedir(deps)
+        sys.path.remove(deps)
+        sys.path.insert(0, deps)
+    roots = [os.environ.get("APPDATA")]
+    try:
+        k = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Explorer\Shell Folders")
+        roots.append(winreg.QueryValueEx(k, "AppData")[0])
+    except OSError:
+        pass
+    roots.append(os.path.join(os.environ.get("USERPROFILE") or os.path.expanduser("~"), "AppData", "Roaming"))
+    ver = f"Python{sys.version_info.major}{sys.version_info.minor}"
+    for root in filter(None, roots):
+        path = os.path.join(root, "Python", ver, "site-packages")
+        if os.path.isdir(path) and path not in sys.path:
+            site.addsitedir(path)
+    if not os.environ.get("APPDATA") and roots[1:2]:
+        os.environ["APPDATA"] = roots[1]  # for anything else that relies on it
+
+
+_ensure_user_site()
+
 try:
     import psutil
 except ImportError as _e:  # pythonw shows nothing: leave a trace in %TEMP%\home_agent.log
     with open(os.path.join(os.environ.get("TEMP", "."), "home_agent.log"), "a", encoding="utf-8") as _f:
-        _f.write(time.strftime("%Y-%m-%d %H:%M:%S ") + f"cannot import psutil ({_e}) with {sys.executable}\n")
+        _roam = os.path.join(os.environ.get("APPDATA") or "", "Python")
+        try:
+            _ls = os.listdir(_roam)
+        except OSError as _err:
+            _ls = f"<{_err}>"
+        _f.write(time.strftime("%Y-%m-%d %H:%M:%S ") + f"cannot import psutil ({_e}) with {sys.executable}"
+                 f" · APPDATA={os.environ.get('APPDATA')} · {_roam} → {_ls} · user={os.environ.get('USERNAME')}"
+                 f" · flags.no_user_site={sys.flags.no_user_site} · sys.path={sys.path}\n")
     raise
 
 PORT = int(os.environ.get("HOME_PORT", "47800"))
