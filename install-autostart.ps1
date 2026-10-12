@@ -1,8 +1,10 @@
-﻿# Creates a shortcut in the Windows Startup folder so the local agent
-# (server.py) starts hidden at login. Run again after moving the folder.
-# Remove: delete "Home Agent.lnk" from shell:startup.
+﻿# Registers a per-user scheduled task "Home Agent" that starts the local agent
+# (server.py, hidden) when you sign in to Windows. No admin rights needed.
+# Run again after moving the folder.
+# Remove:  Unregister-ScheduledTask -TaskName 'Home Agent' -Confirm:$false
 
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
+$taskName = 'Home Agent'
 
 # Find pythonw.exe: python.org installs register it (newest version first),
 # then PATH, then whatever `python` / `py` runs, then the default install folder.
@@ -38,15 +40,21 @@ if (-not $pythonw) {
     exit 1
 }
 
-$lnkPath = Join-Path ([Environment]::GetFolderPath('Startup')) 'Home Agent.lnk'
-$shell = New-Object -ComObject WScript.Shell
-$lnk = $shell.CreateShortcut($lnkPath)
-$lnk.TargetPath       = $pythonw
-$lnk.Arguments        = '"' + (Join-Path $here 'server.py') + '"'
-$lnk.WorkingDirectory = $here
-$lnk.Description      = 'Home / System 01 local agent (http://127.0.0.1:47800)'
-$lnk.Save()
-Write-Output "Autostart creado: $lnkPath"
+# Older versions used a Startup-folder shortcut; remove it so there's one launcher only.
+$oldLnk = Join-Path ([Environment]::GetFolderPath('Startup')) 'Home Agent.lnk'
+if (Test-Path $oldLnk) { Remove-Item $oldLnk -Force; Write-Output "Acceso directo antiguo eliminado: $oldLnk" }
+
+$user = "$env:USERDOMAIN\$env:USERNAME"
+$action = New-ScheduledTaskAction -Execute $pythonw -Argument ('"' + (Join-Path $here 'server.py') + '"') -WorkingDirectory $here
+$trigger = New-ScheduledTaskTrigger -AtLogOn -User $user
+$trigger.Delay = 'PT15S'  # let Windows finish signing in first
+$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable `
+    -ExecutionTimeLimit ([TimeSpan]::Zero) -RestartCount 5 -RestartInterval (New-TimeSpan -Minutes 1) -MultipleInstances IgnoreNew
+$principal = New-ScheduledTaskPrincipal -UserId $user -LogonType Interactive -RunLevel Limited
+
+Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Settings $settings -Principal $principal `
+    -Description 'Home / System 01 local agent (http://127.0.0.1:47800)' -Force | Out-Null
+Write-Output "Tarea programada creada: '$taskName' (al iniciar sesión)"
 Write-Output "Python: $pythonw"
 
 # Start it now too, unless an agent is already answering.
@@ -55,6 +63,6 @@ try { $running = (Invoke-WebRequest -UseBasicParsing -TimeoutSec 2 'http://127.0
 if ($running) {
     Write-Output "El agente ya estaba en marcha en http://127.0.0.1:47800"
 } else {
-    Start-Process -FilePath $pythonw -ArgumentList $lnk.Arguments -WorkingDirectory $here -WindowStyle Hidden
+    Start-ScheduledTask -TaskName $taskName
     Write-Output "Agente arrancado en http://127.0.0.1:47800"
 }

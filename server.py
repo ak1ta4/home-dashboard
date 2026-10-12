@@ -23,7 +23,12 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlencode, urlparse
 from urllib.request import Request, urlopen
 
-import psutil
+try:
+    import psutil
+except ImportError as _e:  # pythonw shows nothing: leave a trace in %TEMP%\home_agent.log
+    with open(os.path.join(os.environ.get("TEMP", "."), "home_agent.log"), "a", encoding="utf-8") as _f:
+        _f.write(time.strftime("%Y-%m-%d %H:%M:%S ") + f"cannot import psutil ({_e}) with {sys.executable}\n")
+    raise
 
 PORT = int(os.environ.get("HOME_PORT", "47800"))
 WEB_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web")
