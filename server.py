@@ -13,6 +13,7 @@ import platform
 import re
 import socket
 import subprocess
+import sys
 import threading
 import time
 import winreg
@@ -752,7 +753,61 @@ class Handler(SimpleHTTPRequestHandler):
         super().end_headers()
 
 
+AGENT_LOG = os.path.join(os.environ.get("TEMP", "."), "home_agent.log")
+
+
+def agent_log(msg):
+    """pythonw has no console, so startup and crashes go to %TEMP%\\home_agent.log."""
+    try:
+        with open(AGENT_LOG, "a", encoding="utf-8") as f:
+            f.write(time.strftime("%Y-%m-%d %H:%M:%S ") + msg + "\n")
+    except OSError:
+        pass
+
+
+def _log_thread_crash(args):
+    import traceback
+    agent_log(f"thread {args.thread.name} crashed:\n" + "".join(
+        traceback.format_exception(args.exc_type, args.exc_value, args.exc_traceback)))
+
+
+def watchdog():
+    """Started hidden (pythonw, e.g. from the Startup shortcut): run the real agent
+    as a child and restart it whenever it exits — including native crashes that
+    leave no Python traceback."""
+    me = os.path.abspath(__file__)
+    while True:
+        child = subprocess.Popen([sys.executable, me, "--child"], cwd=os.path.dirname(me), creationflags=NO_WINDOW)
+        agent_log(f"watchdog {os.getpid()} → agent pid {child.pid}")
+        code = child.wait()
+        agent_log(f"agent exited with code {code}; restarting in 5 s")
+        time.sleep(5)
+
+
+def run_agent():
+    import traceback
+    threading.excepthook = _log_thread_crash
+    agent_log(f"start · pid {os.getpid()} · {sys.executable}")
+    try:
+        threading.Thread(target=sample_loop, daemon=True, name="stats").start()
+        threading.Thread(target=media_poll, daemon=True, name="media").start()
+        while True:
+            try:
+                server = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
+                break
+            except OSError as e:  # port busy, or reserved by Windows/Hyper-V at boot
+                agent_log(f"cannot bind 127.0.0.1:{PORT} ({e}); retrying in 5 s")
+                time.sleep(5)
+        agent_log(f"listening on 127.0.0.1:{PORT}")
+        server.serve_forever()
+    except BaseException:
+        agent_log("agent stopped:\n" + traceback.format_exc())
+        raise
+
+
 if __name__ == "__main__":
-    threading.Thread(target=sample_loop, daemon=True).start()
-    threading.Thread(target=media_poll, daemon=True).start()
-    ThreadingHTTPServer(("127.0.0.1", PORT), Handler).serve_forever()
+    hidden = os.path.basename(sys.executable).lower() == "pythonw.exe"
+    if hidden and "--child" not in sys.argv:
+        watchdog()
+    else:
+        run_agent()

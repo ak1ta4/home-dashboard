@@ -46,7 +46,7 @@ Abre <http://127.0.0.1:47800>.
 powershell -NoProfile -ExecutionPolicy Bypass -File .\install-autostart.ps1
 ```
 
-Crea el acceso directo `Home Agent` en `shell:startup`, que lanza `pythonw server.py` sin ventana, y arranca el agente si no estaba ya en marcha. Localiza `pythonw.exe` aunque Python no esté en el `PATH` (lo busca en el registro de Windows). Para quitarlo, borra ese acceso directo.
+Crea el acceso directo `Home Agent` en `shell:startup`, que lanza `pythonw server.py` sin ventana, y arranca el agente si no estaba ya en marcha. Lanzado con `pythonw` (como desde ese acceso directo), el agente se ejecuta bajo un pequeño vigilante que lo relanza si se cierra, y reintenta si el puerto está ocupado o reservado por Windows; arranques y fallos quedan en `%TEMP%\home_agent.log`. Localiza `pythonw.exe` aunque Python no esté en el `PATH` (lo busca en el registro de Windows). Para quitarlo, borra ese acceso directo.
 
 ### Usarlo en el navegador
 
