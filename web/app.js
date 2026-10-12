@@ -8,6 +8,9 @@
   // never the keyboard, so search, bookmarks and text inputs are hidden.
   const WALLPAPER = new URLSearchParams(location.search).get('mode') === 'wallpaper';
   if (WALLPAPER) document.documentElement.classList.add('wallpaper');
+  // ?demo: fictional machine, track, tasks and bookmarks; no agent, no saving.
+  // Used for the README screenshots and the GitHub Pages preview.
+  const DEMO = new URLSearchParams(location.search).has('demo');
   // Default location; override locally in config.json (served by the agent, git-ignored).
   let WX = { city: 'Madrid', region: 'Spain', lat: 40.4168, lon: -3.7038 };
 
@@ -250,8 +253,9 @@
   };
   const renderFullscreen = () => {
     const on = !!document.fullscreenElement;
-    $('ico-fs-on').hidden = on;
-    $('ico-fs-off').hidden = !on;
+    // SVG elements have no .hidden property: toggle the attribute the CSS matches.
+    $('ico-fs-on').toggleAttribute('hidden', on);
+    $('ico-fs-off').toggleAttribute('hidden', !on);
     $('fs').setAttribute('aria-pressed', on);
     $('fs').setAttribute('aria-label', on ? 'Salir de pantalla completa' : 'Pantalla completa');
   };
@@ -267,8 +271,9 @@
     t.setUTCDate(t.getUTCDate() + 4 - day);
     return Math.ceil(((t - Date.UTC(t.getUTCFullYear(), 0, 1)) / 864e5 + 1) / 7);
   };
+  const DEMO_T0 = Date.now();
   const clock = () => {
-    const d = new Date();
+    const d = DEMO ? new Date(2026, 2, 31, 9, 41, Math.floor((Date.now() - DEMO_T0) / 1000) % 60) : new Date();
     setText('hh', pad(d.getHours()));
     setText('mm', pad(d.getMinutes()));
     setText('day', DAYS[d.getDay()]);
@@ -288,6 +293,7 @@
   };
   let wxOk = false;
   const loadConfig = async () => {
+    if (DEMO) { setText('wx-city', WX.city); setText('wx-region', WX.region); return; }
     try {
       const ctl = new AbortController();
       setTimeout(() => ctl.abort(), 1500);
@@ -299,6 +305,13 @@
     setText('wx-region', WX.region || '');
   };
   const weather = async () => {
+    if (DEMO) {
+      setText('wx-temp', '21°');
+      setText('wx-desc', 'Clear sky · H 24° L 12°');
+      wxOk = true;
+      renderNetTag();
+      return;
+    }
     try {
       const url = `https://api.open-meteo.com/v1/forecast?latitude=${WX.lat}&longitude=${WX.lon}`
         + '&current=temperature_2m,weather_code&daily=temperature_2m_max,temperature_2m_min'
@@ -389,8 +402,8 @@
     setText('np-title', has ? m.title : 'Nothing playing');
     setText('np-artist', has ? [m.artist, m.album].filter(Boolean).join(' · ') || '—' : '—');
     setText('np-label', has ? `${m.playing ? 'Now playing' : 'Paused'}${m.app ? ' · ' + m.app : ''}` : 'Now playing');
-    $('ico-play').hidden = has && m.playing;
-    $('ico-pause').hidden = !(has && m.playing);
+    $('ico-play').toggleAttribute('hidden', has && m.playing); // SVG: attribute, not .hidden
+    $('ico-pause').toggleAttribute('hidden', !(has && m.playing));
     if (has && m.dur > 0) {
       const pos = Math.min(m.dur, m.pos + (m.playing ? (Date.now() - mediaAt) / 1000 : 0));
       setText('np-pos', dur(pos));
@@ -402,6 +415,7 @@
     }
   };
   document.querySelectorAll('[data-media]').forEach(b => b.addEventListener('click', async () => {
+    if (DEMO) { if (b.dataset.media === 'toggle') demo.playing = !demo.playing; else demo.pos = 0; poll(); return; }
     try {
       await fetch(`${API}/api/media/${b.dataset.media}`, { method: 'POST', headers: { 'X-Home': '1' } });
       setTimeout(poll, 250);
@@ -491,9 +505,38 @@
     renderMedia();
   };
 
+  // Demo machine: plausible values that drift a little every second.
+  const demo = { cpu: 23, mem: 11.4, down: 2.4e6, gpu: 34, pos: 71, playing: true, t: 0 };
+  const drift = (v, step, lo, hi) => Math.min(hi, Math.max(lo, v + (Math.random() - .5) * step));
+  const demoStats = () => {
+    demo.t++;
+    demo.cpu = drift(demo.cpu, 10, 8, 64);
+    demo.mem = drift(demo.mem, .3, 9.5, 14);
+    demo.down = drift(demo.down, 1.6e6, 2e5, 9e6);
+    demo.gpu = Math.round(drift(demo.gpu, 8, 12, 78));
+    if (demo.playing) demo.pos = (demo.pos + 1) % 214;
+    return {
+      ts: Date.now() / 1000, cpu: demo.cpu, cpuName: 'AMD Ryzen 7 7800X3D 8-Core Processor', threads: 16,
+      memUsed: demo.mem, memTotal: 32, down: demo.down, up: demo.down / 14, iface: 'Ethernet', linkMbps: 1000,
+      host: 'SYSTEM-01', uptime: 3 * 3600 + 42 * 60 + demo.t, ip: '192.168.1.20', procs: 241,
+      os: 'Windows 11', build: '26100',
+      disks: [{ name: 'C:', used: 412, total: 931 }, { name: 'D:', used: 1240, total: 1863 }],
+      gpu: { name: 'RTX 4080', util: demo.gpu, temp: 52, vramUsed: 6.1, vramTotal: 16, engine: '3D' },
+      media: { title: 'Neon Avenue', artist: 'Midnight Static', album: 'Night Drive', app: 'Spotify',
+        playing: demo.playing, pos: demo.pos, dur: 214 },
+    };
+  };
+
   // 1 s while the agent answers; back off to 5 s when it doesn't (e.g. on GitHub Pages).
   const poll = async () => {
     clearTimeout(poll.t);
+    if (DEMO) {
+      agentOk = true;
+      renderStats(demoStats());
+      renderAgentTag(); renderNetTag();
+      poll.t = setTimeout(poll, 1000);
+      return;
+    }
     try {
       const r = await fetch(`${API}/api/stats`, { cache: 'no-store' });
       if (!r.ok) throw new Error(r.status);
@@ -535,13 +578,25 @@
     } catch { pendingSync = true; }
   };
   const save = () => {
+    if (DEMO) return; // demo edits live only on screen
     writeLocal();
     pendingSync = true;
     clearTimeout(saveTimer);
     saveTimer = setTimeout(pushRemote, 250);
   };
   let rendered = '';
+  const DEMO_DATA = () => ({
+    bookmarks: [['YouTube', 'https://www.youtube.com/'], ['GitHub', 'https://github.com/'], ['Gmail', 'https://mail.google.com/'],
+      ['Reddit', 'https://www.reddit.com/'], ['Wikipedia', 'https://www.wikipedia.org/'], ['Figma', 'https://www.figma.com/'],
+      ['Spotify', 'https://open.spotify.com/'], ['Notion', 'https://www.notion.so/']].map(([name, url]) => ({ id: uid(), name, url })),
+    todos: [['Review pull requests', false], ['Buy coffee beans', false], ['Book dentist appointment', false], ['Water the plants', true]]
+      .map(([text, done], i) => ({ id: uid(), text, done, created: i })),
+  });
   const loadData = async () => {
+    if (DEMO) {
+      if (!rendered) { data = DEMO_DATA(); rendered = 'demo'; renderTodos(); renderMarks(); }
+      return;
+    }
     let remote = null;
     try {
       const r = await fetch(`${API}/api/data`, { cache: 'no-store' });

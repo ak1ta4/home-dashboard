@@ -2,6 +2,17 @@
 
 Página de inicio / nueva pestaña para Windows, a pantalla completa y en modo oscuro, con estética **dot‑matrix monocroma** (inspirada en el lenguaje visual de Nothing). Muestra datos **reales** de tu PC gracias a un pequeño agente local en Python.
 
+![Dashboard en el navegador (datos de demostración)](docs/dashboard.png)
+
+**Demo en vivo:** <https://ak1ta4.github.io/home-dashboard/?demo> (datos ficticios, no necesita el agente).
+
+<details>
+<summary>Versión wallpaper para Wallpaper Engine</summary>
+
+![Wallpaper (datos de demostración)](docs/wallpaper.png)
+
+</details>
+
 ## Qué incluye
 
 | Tarjeta | Fuente |
@@ -61,7 +72,7 @@ Registra una tarea programada de Windows, `Home Agent`, que lanza `pythonw serve
 
 `web/` se publica automáticamente en **https://ak1ta4.github.io/home-dashboard/** con cada push (workflow `.github/workflows/pages.yml`).
 
-Sin el agente funcionan el reloj, el clima, el buscador con sugerencias de Google (vía JSONP), y las tareas y marcadores (guardados solo en ese navegador). Las tarjetas de sistema muestran `Agent offline`.
+Añade `?demo` a la URL para ver el dashboard con datos ficticios (es lo que muestran las capturas). Sin el agente funcionan el reloj, el clima, el buscador con sugerencias de Google (vía JSONP), y las tareas y marcadores (guardados solo en ese navegador). Las tarjetas de sistema muestran `Agent offline`.
 
 Si abres esa URL en el PC donde corre el agente y su origen está en `origins` de `config.json`, la versión web también muestra tus datos reales (Chrome puede pedir permiso para acceder a la red local).
 
