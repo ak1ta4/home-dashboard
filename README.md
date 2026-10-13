@@ -4,7 +4,7 @@ Página de inicio / nueva pestaña para Windows, a pantalla completa y en modo o
 
 ![Dashboard en el navegador (datos de demostración)](docs/dashboard.png)
 
-**Demo en vivo:** <https://ak1ta4.github.io/home-dashboard/?demo> (datos ficticios, no necesita el agente).
+**Demo en vivo:** <https://ak1ta4.github.io/homepage-dashboard/?demo> (datos ficticios, no necesita el agente).
 
 <details>
 <summary>Versión wallpaper para Wallpaper Engine</summary>
@@ -43,8 +43,8 @@ El botón de pantalla completa usa la Fullscreen API: a diferencia de F11, el na
 ## Instalación
 
 ```powershell
-git clone https://github.com/ak1ta4/home-dashboard.git
-cd home-dashboard
+git clone https://github.com/ak1ta4/homepage-dashboard.git
+cd homepage-dashboard
 python -m pip install --target .deps -r requirements.txt
 python server.py
 ```
@@ -70,7 +70,7 @@ Registra una tarea programada de Windows, `Home Agent`, que lanza `pythonw serve
 
 ### Versión web (GitHub Pages)
 
-`web/` se publica automáticamente en **https://ak1ta4.github.io/home-dashboard/** con cada push (workflow `.github/workflows/pages.yml`).
+`web/` se publica automáticamente en **https://ak1ta4.github.io/homepage-dashboard/** con cada push (workflow `.github/workflows/pages.yml`).
 
 Añade `?demo` a la URL para ver el dashboard con datos ficticios (es lo que muestran las capturas). Sin el agente funcionan el reloj, el clima, el buscador con sugerencias de Google (vía JSONP), y las tareas y marcadores (guardados solo en ese navegador). Las tarjetas de sistema muestran `Agent offline`.
 
