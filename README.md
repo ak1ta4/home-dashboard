@@ -13,22 +13,6 @@ Página de inicio / nueva pestaña para Windows, a pantalla completa y en modo o
 
 </details>
 
-## Tema «terminal»
-
-Segundo aspecto para el mismo dashboard (`web/terminal.html`): una mezcla de lo acogedor de macOS con un escritorio Linux tuneado — cristal esmerilado, paleta gruvbox y JetBrains Mono.
-
-- Fondo generativo, sin imágenes: un campo de caracteres ASCII que sube despacio como humo sobre brasas (ruido con *domain warping* dibujado en un canvas a ~12 fps, desde un atlas de glifos), más cálido abajo y con un poco de luz bajo el ratón.
-- Reloj en mono fina (sin segundos, 24 h o 12 h), la fecha en minúsculas y un saludo que se escribe solo con cursor de terminal: «buenos días», «buenas tardes», «buenas noches» o «dulces sueños», con tu nombre si lo pones.
-- Una ventana de terminal con los semáforos de macOS y `usuario@equipo: ~` en la barra: el prompt `❯` es el buscador (el mismo autocompletado de siempre) y debajo, como un `ls ~/favoritos`, tus favoritos. Cada uno lleva el glifo de su marca ([Simple Icons](https://simpleicons.org)) o su inicial, teñido con un color gruvbox. Atajos `1`–`0` (los números no se muestran), arrastrar para reordenar, `+` en la barra para añadir y, al pasar el ratón, ✎ para editar y × para borrar.
-- Editor de favoritos: nombre, URL, icono (automático, un glifo de Simple Icons por su nombre, una imagen por URL o subida —se recorta a 64 px— o un texto / emoji de hasta dos caracteres) y color. Se guarda en `data.json` como el resto de favoritos.
-- Abajo, una barra de sistema tipo neofetch (equipo, uptime, IP y procesos, del agente; se oculta sin agente).
-- Luz nocturna: una capa cálida (multiplicada) sobre toda la página, como el filtro de luz nocturna del sistema.
-- Ajustes (arriba a la izquierda): intensidad de la luz nocturna y de las brasas, tu nombre, formato de 24 h, iconos glifo / inicial, barra de sistema y animaciones. `F` sigue poniendo pantalla completa.
-
-Los glifos se descargan de jsDelivr (`simple-icons`) la primera vez y se guardan en el navegador; con «inicial» no se hace ninguna petición. Fuente: JetBrains Mono (Google Fonts, OFL).
-
-Pulsa `U` (fuera de un campo de texto) para cambiar entre «nothing» y «terminal»; la elección se recuerda y `index.html` redirige al tema elegido (abrir `terminal.html` directamente también cuenta como elección). También vale `?theme=terminal` o `?theme=nothing` en la URL; en Wallpaper Engine, que tiene su propio almacenamiento, cambia en `wallpaper/index.html` la dirección a `/?mode=wallpaper&theme=terminal`. Wallpaper Engine guarda sus ajustes aparte de los del navegador.
-
 ## Qué incluye
 
 | Tarjeta | Fuente |
@@ -44,7 +28,7 @@ Pulsa `U` (fuera de un campo de texto) para cambiar entre «nothing» y «termin
 | Tareas: añadir, completar, editar (botón de lápiz o doble clic), limpiar hechas | `data.json` vía el agente |
 | Marcadores numerados con atajos `1`–`9` y `0` (10.º), reordenables arrastrando (o con `Alt+↑/↓`) | `data.json` vía el agente |
 
-Atajos (fuera de un campo de texto): `/` buscar · `T` nueva tarea · `1`–`9`, `0` abrir marcador · `F` pantalla completa · `U` cambiar de tema · `Esc` salir del campo.
+Atajos (fuera de un campo de texto): `/` buscar · `T` nueva tarea · `1`–`9`, `0` abrir marcador · `F` pantalla completa · `Esc` salir del campo.
 
 En el buscador: si lo que escribes coincide con el principio del nombre o dominio de un marcador (p. ej. `ani` → anilist), se autocompleta y `Enter` lo abre; `Esc` y luego `Enter` busca en Google. `↑` `↓` recorrer sugerencias · `Enter` abrir · `Ctrl+Enter` en otra pestaña · `Tab` aceptar el autocompletado · `Shift+Supr` borrar una búsqueda reciente · `Esc` cerrar.
 
@@ -109,7 +93,7 @@ Para instalarlo, copia la carpeta `wallpaper/` dentro de `wallpaper_engine\proje
 
 - El agente solo escucha en `127.0.0.1` y rechaza peticiones con otra cabecera `Host` (protección contra DNS rebinding).
 - Las escrituras (`PUT /api/data`, `POST /api/media/*`) exigen la cabecera `X-Home: 1`, lo que fuerza un preflight CORS que solo se acepta para orígenes `moz-extension://` y `chrome-extension://`. Otras webs no pueden leer tus datos ni controlar tu música.
-- Los marcadores solo aceptan URLs `http(s)`. Su icono opcional se valida en el agente: un nombre de Simple Icons, un texto corto, una URL `http(s)` o una imagen PNG / JPEG / WebP / GIF incrustada de hasta ~30 KB (no se aceptan SVG); el color, uno de los siete de gruvbox.
+- Los marcadores solo aceptan URLs `http(s)`.
 - La captura de teclado del wallpaper (`/api/keys`) solo la puede pedir la página servida por el propio agente (mismo origen + `X-Home`) y solo mientras el escritorio está delante.
 - `data.json` (tus tareas y marcadores) y `config.json` (tu ubicación) están en `.gitignore`. Las búsquedas recientes solo se guardan en el `localStorage` del navegador.
 - Mientras escribes en el buscador, el texto se envía a Google para obtener sugerencias (igual que hace la barra del navegador).
@@ -124,11 +108,8 @@ install-autostart.ps1  acceso directo en el Inicio de Windows
 wallpaper/              wallpaper web para Wallpaper Engine (index.html + project.json)
 requirements.txt
 web/
-  app.js                                    lógica común a los dos temas
-  index.html  nothing.css                   tema «nothing» (página de entrada)
-  terminal.html  terminal.css  terminal.js  tema «terminal»
-  theme.js                                  cambio de tema (tecla U, ?theme=)
-  manifest.json                             para usar web/ como extensión de nueva pestaña
+  index.html  style.css  app.js
+  manifest.json        para usar web/ como extensión de nueva pestaña
 ```
 
 ---

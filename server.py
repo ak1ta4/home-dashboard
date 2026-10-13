@@ -138,35 +138,13 @@ def load_data():
         return {}
 
 
-# Optional per-bookmark icon: a Simple Icons slug, a short text / emoji, an image URL,
-# or a small raster image inlined as a data: URL (SVG is not accepted).
-ICON_RE = re.compile(
-    r"si:[a-z0-9]{1,64}"
-    r"|txt:[^\r\n]{1,16}"
-    r"|https?://\S{1,2000}"
-    r"|data:image/(?:png|jpeg|webp|gif);base64,[A-Za-z0-9+/=]{1,40000}"
-)
-COLORS = {"red", "green", "yellow", "blue", "purple", "aqua", "orange"}
-
-
-def clean_mark(b):
-    s = lambda v, n: str(v)[:n] if v is not None else ""
-    out = {"id": s(b.get("id"), 40), "name": s(b.get("name"), 80), "url": s(b.get("url"), 2000)}
-    icon, color = b.get("icon"), b.get("color")
-    if isinstance(icon, str) and ICON_RE.fullmatch(icon):
-        out["icon"] = icon
-    if color in COLORS:
-        out["color"] = color
-    return out
-
-
 def clean_data(d):
     """Keep only the expected shape so a bad client can't write arbitrary blobs."""
     if not isinstance(d, dict):
         raise ValueError("bad payload")
     s = lambda v, n: str(v)[:n] if v is not None else ""
     marks = [
-        clean_mark(b)
+        {"id": s(b.get("id"), 40), "name": s(b.get("name"), 80), "url": s(b.get("url"), 2000)}
         for b in d.get("bookmarks", [])[:200]
         if isinstance(b, dict) and str(b.get("url", "")).startswith(("http://", "https://"))
     ]
