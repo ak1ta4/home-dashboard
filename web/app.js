@@ -790,6 +790,8 @@
       a.setAttribute('role', 'link');
       a.tabIndex = 0;
       a.dataset.url = b.url;
+      if (b.icon) a.dataset.icon = b.icon;   // optional, set by themes that edit icons
+      if (b.color) a.dataset.color = b.color;
       const name = b.name || hostOf(b.url);
       const txt = el('span', 'bm-text');
       txt.append(el('span', 'bm-name', name), el('span', 'bm-host', hostOf(b.url)));
@@ -821,6 +823,22 @@
     save(); renderMarks();
     toggleBmForm(false);
   });
+  // Themes can edit a bookmark in place: name, url and the optional icon / color
+  // (the agent validates their format before writing data.json).
+  window.homeBookmarks = {
+    get: id => { const b = data.bookmarks.find(x => x.id === id); return b ? { ...b } : null; },
+    update: (id, patch) => {
+      const b = data.bookmarks.find(x => x.id === id);
+      if (!b) return false;
+      const url = normUrl(patch.url ?? b.url); // throws on garbage
+      b.url = url;
+      b.name = String(patch.name ?? b.name).trim().slice(0, 80) || nameFrom(url);
+      for (const k of ['icon', 'color']) { if (patch[k]) b[k] = patch[k]; else delete b[k]; }
+      save(); renderMarks();
+      return true;
+    },
+    remove: id => { data.bookmarks = data.bookmarks.filter(x => x.id !== id); save(); renderMarks(); },
+  };
   const openMark = (url, newTab) => {
     if (!/^https?:\/\//i.test(url)) return;
     if (newTab) window.open(url, '_blank', 'noopener');
@@ -895,9 +913,13 @@
     const box = bmList.getBoundingClientRect();
     if (e.clientY < box.top + 28) bmList.scrollTop -= 8;
     else if (e.clientY > box.bottom - 28) bmList.scrollTop += 8;
-    const before = [...bmList.querySelectorAll('li[data-id]')].find(li => {
+    // A list reads top to bottom; a grid (several bookmarks per row) also left to right.
+    const lis = [...bmList.querySelectorAll('li[data-id]')];
+    const grid = lis.length > 1 && Math.abs(lis[0].getBoundingClientRect().top - lis[1].getBoundingClientRect().top) < 1;
+    const before = lis.find(li => {
       const r = li.getBoundingClientRect();
-      return e.clientY < r.top + r.height / 2;
+      if (!grid) return e.clientY < r.top + r.height / 2;
+      return e.clientY < r.top || (e.clientY < r.bottom && e.clientX < r.left + r.width / 2);
     });
     if (before) { if (drag.marker.nextSibling !== before) bmList.insertBefore(drag.marker, before); }
     else if (bmList.lastChild !== drag.marker) bmList.append(drag.marker);
