@@ -87,6 +87,7 @@ Para instalarlo, copia la carpeta `wallpaper/` dentro de `wallpaper_engine\proje
 ## Configuración
 
 - **Ubicación del clima y orígenes permitidos**: copia `config.example.json` a `config.json` y pon tu ciudad, región y coordenadas, y en `origins` la URL de tu GitHub Pages. `config.json` está en `.gitignore`, así que tu ubicación no se sube. Sin ese archivo se usa Madrid.
+- **Historial del navegador**: el agente ofrece en `/api/history` los sitios y páginas que más visitas, leídos de una copia del archivo de historial de tu navegador (Chrome, Edge, Brave, Vivaldi, Opera o Firefox; el que se haya usado más recientemente). Lo usa [homepage-terminal](https://github.com/ak1ta4/homepage-terminal) para autocompletar direcciones en su buscador. En `config.json`, `"history"` puede ser la ruta a un archivo concreto (`History` o `places.sqlite`) o `false` para desactivarlo.
 - **Puerto**: variable de entorno `HOME_PORT` (por defecto `47800`). Si lo cambias, actualiza también `API` en `web/app.js` para la versión extensión.
 
 ## Seguridad
@@ -94,6 +95,7 @@ Para instalarlo, copia la carpeta `wallpaper/` dentro de `wallpaper_engine\proje
 - El agente solo escucha en `127.0.0.1` y rechaza peticiones con otra cabecera `Host` (protección contra DNS rebinding).
 - Las escrituras (`PUT /api/data`, `POST /api/media/*`) exigen la cabecera `X-Home: 1`, lo que fuerza un preflight CORS que solo se acepta para orígenes `moz-extension://` y `chrome-extension://`. Otras webs no pueden leer tus datos ni controlar tu música.
 - Los marcadores solo aceptan URLs `http(s)`.
+- El historial (`/api/history`) solo se entrega a la página del propio agente y a los orígenes de `origins` (no a extensiones), y exige `X-Home`. Cualquier página publicada en ese origen (por ejemplo, todo `https://<tu-usuario>.github.io`) puede leerlo mientras el agente está en marcha.
 - La captura de teclado del wallpaper (`/api/keys`) solo la puede pedir la página servida por el propio agente (mismo origen + `X-Home`) y solo mientras el escritorio está delante.
 - `data.json` (tus tareas y marcadores) y `config.json` (tu ubicación) están en `.gitignore`. Las búsquedas recientes solo se guardan en el `localStorage` del navegador.
 - Mientras escribes en el buscador, el texto se envía a Google para obtener sugerencias (igual que hace la barra del navegador).
@@ -102,7 +104,7 @@ Para instalarlo, copia la carpeta `wallpaper/` dentro de `wallpaper_engine\proje
 
 ```
 server.py              agente local: estáticos + /api/stats, /api/data, /api/media/*,
-                       /api/suggest, /api/config
+                       /api/suggest, /api/history, /api/config
 config.example.json    plantilla de config.json (ubicación del clima)
 install-autostart.ps1  acceso directo en el Inicio de Windows
 wallpaper/              wallpaper web para Wallpaper Engine (index.html + project.json)

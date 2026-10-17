@@ -124,6 +124,117 @@ def google_suggest(q):
     _suggest_cache[q] = out
     return out
 
+# ---------- Browser history (autocomplete for the search box) ----------
+# Pages can't see the browser's history, so the agent reads it from the browser's own
+# history file and hands back the sites and pages you visit most. Auto-detects Chrome, Edge,
+# Brave, Vivaldi, Opera and Firefox and uses whichever was written to last; config.json
+# "history" can point at a specific file instead, or be false to turn this off.
+HISTORY_TTL = 60
+_history = {"at": 0.0, "out": None}
+_history_lock = threading.Lock()
+CHROMIUM_DIRS = {
+    "Chrome": r"Google\Chrome\User Data", "Edge": r"Microsoft\Edge\User Data",
+    "Brave": r"BraveSoftware\Brave-Browser\User Data", "Vivaldi": r"Vivaldi\User Data",
+    "Chromium": r"Chromium\User Data",
+}
+
+
+def history_files():
+    """[(browser, path)] of every history file found, most recently written first."""
+    try:
+        with open(CONFIG_FILE, encoding="utf-8") as f:
+            pick = json.load(f).get("history", True)
+    except (OSError, ValueError, AttributeError):
+        pick = True
+    if pick is False:
+        return []
+    if isinstance(pick, str):
+        kind = "Firefox" if pick.lower().endswith("places.sqlite") else "Chromium"
+        return [(kind, pick)] if os.path.isfile(pick) else []
+    import glob
+    local, roam = os.environ.get("LOCALAPPDATA", ""), os.environ.get("APPDATA", "")
+    found = []
+    for name, sub in CHROMIUM_DIRS.items():
+        for p in glob.glob(os.path.join(local, sub, "*", "History")):
+            found.append((name, p))
+    for sub in ("Opera Stable", "Opera GX Stable"):
+        for p in (os.path.join(roam, "Opera Software", sub, "History"),
+                  os.path.join(roam, "Opera Software", sub, "Default", "History")):
+            if os.path.isfile(p):
+                found.append(("Opera", p))
+    for p in glob.glob(os.path.join(roam, "Mozilla", "Firefox", "Profiles", "*", "places.sqlite")):
+        found.append(("Firefox", p))
+    return sorted(found, key=lambda bp: os.path.getmtime(bp[1]), reverse=True)
+
+
+def _read_history(browser, path):
+    """Rows (url, title, visits, typed, last visit as unix time) from a copy of the file:
+    the browser keeps the original locked while it runs."""
+    import shutil
+    import sqlite3
+    import tempfile
+    tmp = tempfile.mkdtemp(prefix="home_hist_")
+    try:
+        copy = os.path.join(tmp, "h.sqlite")
+        shutil.copyfile(path, copy)
+        for ext in ("-wal", "-journal"):  # Firefox keeps recent visits in its WAL
+            if os.path.isfile(path + ext):
+                shutil.copyfile(path + ext, copy + ext)
+        con = sqlite3.connect(copy)
+        try:
+            if browser == "Firefox":
+                sql = ("SELECT url, title, visit_count, typed, last_visit_date / 1000000.0 FROM moz_places"
+                       " WHERE hidden = 0 AND visit_count > 0 AND url LIKE 'http%'"
+                       " ORDER BY last_visit_date DESC LIMIT 20000")
+            else:  # Chromium: microseconds since 1601
+                sql = ("SELECT url, title, visit_count, typed_count, last_visit_time / 1000000.0 - 11644473600"
+                       " FROM urls WHERE hidden = 0 AND url LIKE 'http%' ORDER BY last_visit_time DESC LIMIT 20000")
+            return con.execute(sql).fetchall()
+        finally:
+            con.close()
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def browser_history():
+    """Top sites (for inline autofill: "y" → youtube.com) and top pages (matched by title).
+    Score = visits, typed visits counting extra, fading over a month or so."""
+    with _history_lock:
+        if _history["out"] is not None and time.time() - _history["at"] < HISTORY_TTL:
+            return _history["out"]
+        out = {"browser": None, "hosts": [], "pages": []}
+        for browser, path in history_files()[:1]:
+            try:
+                rows = _read_history(browser, path)
+            except Exception as e:
+                agent_log(f"history: cannot read {browser} ({e})")
+                break
+            now = time.time()
+            hosts, pages = {}, []
+            for url, title, visits, typed, last in rows:
+                u = urlparse(url)
+                if u.scheme not in ("http", "https") or not u.hostname or len(url) > 2000:
+                    continue
+                score = ((visits or 0) + 4 * (typed or 0)) / (1 + max(0.0, now - (last or 0)) / (30 * 86400))
+                host = u.netloc.lower()
+                host = host[4:] if host.startswith("www.") else host
+                root = u.path in ("", "/") and not u.query
+                h = hosts.setdefault(host, {"h": host, "u": f"{u.scheme}://{u.netloc}/", "t": "", "s": 0.0, "best": -1.0})
+                h["s"] += score
+                if root and score > h["best"]:  # the address you actually go to, http/https and www or not
+                    h.update(u=f"{u.scheme}://{u.netloc}/", t=(title or "")[:120], best=score)
+                if not root and not (u.path == "/search" and "q=" in u.query):  # skip search result pages
+                    pages.append({"u": url[:600], "t": (title or "")[:120], "s": score})
+            top = sorted(hosts.values(), key=lambda h: -h["s"])[:400]
+            out = {
+                "browser": browser,
+                "hosts": [{"h": h["h"], "u": h["u"], "t": h["t"], "s": round(h["s"], 2)} for h in top],
+                "pages": [dict(p, s=round(p["s"], 2)) for p in sorted(pages, key=lambda p: -p["s"])[:600]],
+            }
+        _history.update(at=time.time(), out=out)
+        return out
+
+
 GB = 1024 ** 3
 state = {}
 lock = threading.Lock()
@@ -754,6 +865,13 @@ class Handler(SimpleHTTPRequestHandler):
                 since = 0
             events, active = keys.poll(since)
             return self._json(200, {"events": events, "active": active})
+        if self.path.startswith("/api/history"):
+            # Your browsing history: only for the agent's own page and config.json "origins"
+            # (not for any browser extension), and X-Home forces a CORS preflight.
+            origin = self.headers.get("Origin")
+            if self.headers.get("X-Home") != "1" or not (self._same_origin() or origin in web_origins()):
+                return self.send_error(403)
+            return self._json(200, browser_history())
         if self.path.startswith("/api/suggest"):
             q = parse_qs(urlparse(self.path).query).get("q", [""])[0].strip()[:200]
             return self._json(200, google_suggest(q) if q else [])
